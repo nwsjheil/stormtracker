@@ -17,72 +17,82 @@ const COG_CONFIG = {
             { label: '8" +', color: '#ffffc2' }
         ]
     },
-    'mrms_hail_size': {
-        title: "MAX HAIL SIZE (IN)",
-        steps: [
-            { label: '4.00"+', color: '#ff0000' },
-            { label: '2.75"', color: '#ff8c00' },
-            { label: '1.75"', color: '#ffff00' },
-            { label: '1.00"', color: '#00ff00' }
-        ]
-    }
+'mrms_mesh': {
+    title: "MAX HAIL SIZE (IN)",
+    steps: [
+        { label: '0.25" (Pea)',       color: '#01a0f6' },
+        { label: '0.50"',             color: '#00ecec' },
+        { label: '1.00" (Quarter)',    color: '#ffff00' },
+        { label: '1.50"',             color: '#ff9000' },
+        { label: '1.75" (Golf Ball)',  color: '#ff0000' },
+        { label: '2.00"',             color: '#800000' }, // Maroon
+        { label: '2.50" (Tennis Ball)', color: '#ff00ff' },
+        { label: '3.00"',             color: '#9955c9' },
+        { label: '4.00"+ (Softball)',  color: '#ffffff' } 
+    ]
+}
 };
 
 /**
  * Draws the active legend onto the export canvas.
  */
-/**
- * Draws the active legend onto the export canvas as a skinny horizontal bar.
- */
-function drawLegendToCanvas(ctx, layerKey, canvasWidth, canvasHeight) {
-    const config = COG_CONFIG[layerKey];
+function drawLegendToCanvas(ctx, layer, totalW, totalH) {
+    const config = COG_CONFIG[layer];
     if (!config) return;
 
-    const stepW = 60; 
-    const legW = (config.steps.length * stepW) + 20;
-    const legH = 55; // Increased slightly for better vertical breathing room
-    const legX = canvasWidth - legW - 30;
-    const legY = canvasHeight - legH - 30;
+    const padding = 15;
+    const itemGap = 20;
+    const colorSize = 12;
+    const textOffset = 6;
+    
+    // 1. CALCULATE DYNAMIC WIDTH
+    // Measure each label to find the exact required width
+    ctx.font = "10px 'Roboto'";
+    let totalRequiredWidth = padding * 2;
+    
+    config.steps.forEach((step, index) => {
+        const labelWidth = ctx.measureText(step.label).width;
+        totalRequiredWidth += colorSize + textOffset + labelWidth;
+        if (index < config.steps.length - 1) totalRequiredWidth += itemGap;
+    });
 
-    // 1. Background Container
+    // 2. POSITIONING
+    // Anchor to bottom right (matches your #cogLegend.preview-mode CSS)
+    const legendH = 45;
+    const legendX = totalW - totalRequiredWidth - 20;
+    const legendY = totalH - legendH - 20;
+
+    // 3. DRAW BACKGROUND PLATE
     ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
-    ctx.beginPath();
-    ctx.roundRect(legX, legY, legW, legH, 8);
-    ctx.fill();
     ctx.strokeStyle = "rgba(169, 231, 255, 0.3)";
     ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(legendX, legendY, totalRequiredWidth, legendH, 8);
+    ctx.fill();
     ctx.stroke();
 
-    // 2. Title (Subtle padding from top)
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top"; // Anchor to the top
-    ctx.font = "900 10px 'Roboto'";
+    // 4. DRAW TITLE
     ctx.fillStyle = "#a9e7ff";
-    ctx.fillText(config.title, legX + 10, legY + 8);
+    ctx.font = "900 9px 'Roboto'";
+    ctx.textAlign = "left";
+    ctx.fillText(config.title, legendX + padding, legendY + 15);
 
-    // 3. Define the Row Midpoint
-    // This finds the center of the area remaining below the title
-    const contentAreaTop = legY + 22;
-    const contentAreaHeight = legH - 22;
-    const rowMidpointY = contentAreaTop + (contentAreaHeight / 2);
+    // 5. DRAW ITEMS
+    let currentX = legendX + padding;
+    const itemY = legendY + 30;
 
-    // 4. Color Steps Loop
-    ctx.textBaseline = "middle"; // CRITICAL: Centers text vertically on the Y-point
-    
-    config.steps.forEach((step, i) => {
-        const itemX = legX + 10 + (i * stepW);
-        const boxSize = 12;
-        
-        // Vertically center the box on the rowMidpointY
-        const boxY = rowMidpointY - (boxSize / 2);
-        
-        // Color box
+    config.steps.forEach(step => {
+        // Draw Color Box
         ctx.fillStyle = step.color;
-        ctx.fillRect(itemX, boxY, boxSize, boxSize);
+        ctx.fillRect(currentX, itemY - 8, colorSize, colorSize);
         
-        // Text (now perfectly centered with the box via 'middle' baseline)
-        ctx.fillStyle = "white";
-        ctx.font = "700 11px 'Roboto'";
-        ctx.fillText(step.label, itemX + 16, rowMidpointY);
+        // Draw Label
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "10px 'Roboto'";
+        const labelWidth = ctx.measureText(step.label).width;
+        ctx.fillText(step.label, currentX + colorSize + textOffset, itemY);
+        
+        // Advance X pointer
+        currentX += colorSize + textOffset + labelWidth + itemGap;
     });
 }

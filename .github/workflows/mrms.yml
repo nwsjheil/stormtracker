@@ -35,7 +35,10 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+      
           git add output/mrms_1h_qpe_cog.tif
-          # This keeps your repo size small by overwriting the last update
-          git commit --amend -m "Latest MRMS Update" || git commit -m "Latest MRMS Update"
-          git push --force
+      
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+      
+          git commit -m "Latest MRMS Update"
+          git push

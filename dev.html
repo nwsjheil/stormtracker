@@ -111,6 +111,12 @@ body{
     color:black;
 }
 
+#homeBtn:active {
+    background: var(--accent);
+    color: black;
+    transform: scale(0.95);
+}
+
 .tool.danger-btn{
     color:var(--danger);
 }
@@ -396,7 +402,7 @@ body{
 
 #previewTS {
     color: rgba(255, 255, 255, 0.7);
-    font-size: 13px;
+    font-size: 16.5px;
     font-family: 'Roboto', sans-serif;
     font-weight: 700;
     letter-spacing: 1px;
@@ -523,6 +529,17 @@ body{
     border-color: #ffffff;
     box-shadow: 0 0 10px rgba(253, 224, 71, 0.5);
 }
+
+/* Hide the hint by default */
+.exit-hint {
+    opacity: 0 !important;
+    transition: opacity 0.2s ease;
+}
+
+/* Show the hint only when the popup is hovered */
+.custom-warning-popup:hover .exit-hint {
+    opacity: 0.8 !important;
+}
 </style>
 </head>
 
@@ -537,9 +554,10 @@ body{
     ========================== -->
     <div class="toolbar-row">
 
-        <div class="tool-group">
-            <div class="tool active" id="panBtn">PAN</div>
-        </div>
+    <div class="tool-group">
+        <div class="tool active" id="panBtn">PAN</div>
+        <div class="tool" id="homeBtn" style="font-size: 16px;">🏠</div>
+    </div>
 
         <div class="tool-group">
             <div class="tool" id="coneBtn">CONE</div>
@@ -598,8 +616,12 @@ body{
                     <option value="ktpa|ktpa_bref1">TPA</option>
                 </optgroup>
                 <optgroup label="MRMS">
-    <option value="cog|mrms_1h_qpe">1H QPE (exp)</option>
-    <option value="cog|mrms_mesh">Hail Size (exp)</option>
+    <option value="cog|1h_qpe">1H QPE</option>
+    <option value="cog|3h_qpe">3H QPE</option>
+    <option value="cog|6h_qpe">6H QPE</option>
+    <option value="cog|12h_qpe">12H QPE</option>
+    <option value="cog|24h_qpe">24H QPE</option>
+    <option value="cog|mesh">Hail Size</option>
 </optgroup>
                 <optgroup label="Satellite">
 <option value="sat|goes_visible_imagery">VIS</option>
@@ -654,8 +676,7 @@ body{
 
 <div class="help" id="help">
 
-    CONE MODE:<br>
-    CLICK + DRAG TO TRACK
+    PAN MODE:<br>CLICK + DRAG TO MOVE MAP
 
 </div>
 <div id="customTextBox" style="display:none; position:absolute; top:40%; left:40%; z-index:200; padding:10px; border-radius:12px; background:rgba(204, 109, 0, 0.8); border:2px solid var(--accent); backdrop-filter:blur(8px); min-width:200px;">
@@ -764,6 +785,20 @@ widthSlider.oninput = (e) => {
             }
         }
     }
+};
+document.getElementById('homeBtn').onclick = () => {
+    // These methods pull the values from the map's current state 
+    // or you can use the specific numbers since they are already in your Map constructor
+    map.flyTo({
+        center: [-81.4, 28.5], 
+        zoom: 7,
+        pitch: 0,
+        bearing: 0,
+        essential: true,
+        duration: 1500
+    });
+    
+    setMode('pan');
 };
 const map = new maplibregl.Map({
     container: 'map',
@@ -982,10 +1017,50 @@ const expireStr = expireDate.toLocaleTimeString([], {
         const isDarkText = ['#FFFF00', '#00FF00', '#D2B48C'].includes(activeColor);
         const iconColor = isDarkText ? '#000000' : '#FFFFFF';
 
+// --- UPDATED: Motion Parsing Logic (Toward + Rounded Speed) ---
+let motionText = "";
+let params = props.parameters || {};
+
+if (typeof params === 'string') {
+    try { params = JSON.parse(params); } catch (e) { params = {}; }
+}
+
+const motionData = params.eventMotionDescription;
+
+if (motionData) {
+    const motionStr = Array.isArray(motionData) ? motionData[0] : motionData;
+    const motionMatch = motionStr.match(/(\d+)DEG\.\.\.(\d+)KT/);
+    
+    if (motionMatch) {
+        let fromDegrees = parseInt(motionMatch[1]);
+        const knots = parseInt(motionMatch[2]);
+
+        // 1. Convert "Coming From" to "Moving Toward"
+        // Add 180 and use modulo 360 to stay within the circle
+        let towardDegrees = (fromDegrees + 180) % 360;
+
+        // 2. Convert Knots to MPH and round to nearest 5
+        const rawMph = knots * 1.15078;
+        const roundedMph = Math.round(rawMph / 5) * 5;
+
+        // 3. Convert towardDegrees to 16-point Cardinal
+        const cardinals = [
+                    "North", "North-Northeast", "Northeast", "East-Northeast", 
+                    "East", "East-Southeast", "Southeast", "South-Southeast", 
+                    "South", "South-Southwest", "Southwest", "West-Southwest", 
+                    "West", "West-Northwest", "Northwest", "North-Northwest"
+                ];
+        const cardinal = cardinals[Math.round(towardDegrees / 22.5) % 16];
+
+        // Format the output
+        motionText = `<div style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:4px;">
+                        Moving ${cardinal} at ${roundedMph} MPH
+                      </div>`;
+    }
+}
 // --- Advanced Hazard Parsing (Fixed for JSON strings) ---
 // If parameters is a string (common in MapLibre/GeoJSON processing), parse it
 // 1. Parse parameters if it's a string, otherwise use as is
-let params = props.parameters || {};
 if (typeof params === 'string') {
     try {
         params = JSON.parse(params);
@@ -1018,9 +1093,12 @@ const ffThreat = params.flashFloodDamageThreat ? params.flashFloodDamageThreat[0
 // Ensure every variable used here is defined above
 const popupHtml = `
     <div id="warn-popup-${warnId}" class="movable-popup" style="width:300px; padding:12px; cursor: default;font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
-        <div class="popup-handle" style="cursor:move; height:14px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:flex-end; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
-            <button class="close-warn-btn" onclick="closeWarningPopup()" style="background:rgba(0,0,0,0.2); color:${iconColor}; border:1px solid rgba(0,0,0,0.1); border-radius:4px; width:22px; height:22px; cursor:text; font-weight:bold; opacity:0; transition:opacity 0.2s; display:flex; align-items:center; justify-content:center; font-size:11px;">✕</button>
-        </div>
+    
+    <div class="popup-handle" style="cursor:move; height:14px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:flex-end; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
+    <div class="exit-hint" style="font-size: 9px; color: ${iconColor}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; pointer-events: none; user-select: none;">
+        Click map to clear.
+    </div>
+    </div>
 
         <div class="warn-edit-tools" style="display:none; gap:5px; padding:8px 0; border-bottom:1px solid #eee; margin-bottom:5px; justify-content:center;">
             <button onclick="document.execCommand('bold', false, null)" style="width:24px; height:24px; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; font-weight:bold;">B</button>
@@ -1030,7 +1108,7 @@ const popupHtml = `
 
         <div style="padding-top:10px;">
             <b contenteditable="true" class="edit-target" style="color:#b91c1c; text-transform:uppercase; font-size:18px; display:block; margin-bottom:2px; outline:none;">${props.event}</b>
-            <div contenteditable="true" style="font-size:12px; color:#334155; margin-bottom:6px;"><b>Ends:</b> ${expireStr}</div>
+            <div contenteditable="true" class="edit-target" style="font-size:15px; color:#334155; margin-bottom:6px;"><b>Until:</b> ${expireStr}</div>
             
             ${(wind || hail || torn || water || ffDetection || ffThreat) ? `
             <div style="background:#fff1f2; border:1px solid #fecaca; padding:8px; border-radius:6px; margin:5px 0;">
@@ -1046,8 +1124,9 @@ const popupHtml = `
             </div>` : ''}
 
             <div contenteditable="true" class="edit-target" style="max-height:120px; overflow-y:auto; border-top:1px solid #e2e8f0; padding-top:6px; font-size:12px; color:#64748b; line-height:1.3; outline:none;">
-                <b>Areas:</b> ${props.areaDesc}
+                <b>Affected:</b> ${props.areaDesc}
             </div>
+                        <div contenteditable="true" class="edit-target" style="font-size:15px; color:#334155; margin-bottom:6px;">${motionText}</div>
         </div>
     </div>
 `;
@@ -1706,6 +1785,9 @@ map.addSource('lightning-data', {
         id: 'lightning-glow',
         type: 'circle',
         source: 'lightning-data',
+        layout: {
+        'visibility': 'none' // Start hidden
+            },
         paint: {
             'circle-color': [
                 'step',
@@ -1716,7 +1798,7 @@ map.addSource('lightning-data', {
             'circle-blur': 0.8,
             'circle-opacity': 0.6
         }
-    });
+    }, 'road-shields');
 
     // The Icon
     map.addLayer({
@@ -1726,9 +1808,10 @@ map.addSource('lightning-data', {
         layout: {
             'icon-image': 'lightning-bolt',
             'icon-size': 0.4, // Adjust this to make the bolt bigger/smaller
-            'icon-allow-overlap': true
+            'icon-allow-overlap': true,
+            'visibility': 'none'
         }
-    });
+    }, 'road-shields');
 
 map.addLayer({
     id: 'spotlight-layer',
@@ -2561,8 +2644,8 @@ mapPrioritized.forEach(city => {
     if (pos.x < 0 || pos.y < 0 || pos.x > map.getCanvas().width || pos.y > map.getCanvas().height) return;
 
     // Define the buffer/padding around the label
-    const buffer = 10; 
-    const estWidth = (city.properties.name.length * 9) + 40;
+    const buffer = 5; 
+    const estWidth = (city.properties.name.length * 9) + 20;
 
     // Construct the collision rectangle using the buffer
     const currentRect = { 
@@ -2653,7 +2736,7 @@ document.getElementById('exportBtn').onclick = () => {
         year: 'numeric', hour: 'numeric', minute: '2-digit', 
         timeZoneName: 'short' 
     });
-    document.getElementById('previewTS').innerText = "Created: " + ts;
+    document.getElementById('previewTS').innerText = "" + ts;
     
     setMode('pan');
 
@@ -2694,7 +2777,8 @@ document.getElementById('exportBtn').onclick = () => {
             // Hide the specific warning toolbars
             const allWarnTools = document.querySelectorAll('.warn-edit-tools');
             allWarnTools.forEach(t => t.style.setProperty('display', 'none', 'important'));
-
+            const hints = document.querySelectorAll('.exit-hint');
+            hints.forEach(h => h.style.setProperty('display', 'none', 'important'));
             // Hide main text box controls
             if (txtBox && txtBox.style.display !== 'none') {
                 textControls.style.display = 'none';
@@ -2759,9 +2843,9 @@ document.getElementById('exportBtn').onclick = () => {
         ctx.fillText('UPDATE', badgeX + 57.5, mainTextY);
 
         ctx.textAlign = "left";
-        ctx.font = "700 13px 'Roboto'"; 
+        ctx.font = "700 18px 'Roboto'"; 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText("CREATED: " + ts.toUpperCase(), textLeftX, 92);
+        ctx.fillText("" + ts.toUpperCase(), textLeftX, 92);
 
         // 3. Draw Logo
         const logo = new Image();
@@ -2861,7 +2945,8 @@ async function loadPOIs() {
         { name: "St Cloud (Osceola)", lat: 28.241, lon: -81.282 },
         { name: "Poinciana (Osceola)", lat: 28.153, lon: -81.467 },
         { name: "Holopaw (Osceola)", lat: 28.132, lon: -81.076 },
-        { name: "Kenansville (Osceola)", lat: 27.875, lon: -80.989 },
+        { name: "Kenansville (Osceola)", lat: 27.875, lon: -80.989, pop: 1000 },
+        { name: "Yeehaw Jct (Osceola)", lat: 27.697, lon: -80.898 },
         { name: "Vero Beach* (Indian River)", lat: 27.655556, lon: -80.417944 },
         { name: "Sebastian (Indian River)", lat: 27.815, lon: -80.474 },
         { name: "Fellsmere (Indian River)", lat: 27.763, lon: -80.602 },
@@ -3003,16 +3088,60 @@ document.getElementById('radarSelector').onchange = async (e) => {
     const layer = parts[1];  
     const legendEl = document.getElementById('cogLegend'); // The legend container
     console.log("Layer selected:", layer, "Config exists:", typeof COG_CONFIG !== 'undefined' ? !!COG_CONFIG[layer] : "File not loaded");
-    // --- LEGEND UI MANAGEMENT ---
-    // Hide legend by default; only show if it's a COG with a config entry
-    legendEl.style.display = 'none';
+// Global to store the active timestamp for the export canvas
+window.activeLayerTimestamp = "";
+
+// --- LEGEND UI MANAGEMENT ---
+legendEl.style.display = 'none';
 
 if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
     const config = COG_CONFIG[layer];
     
-    document.getElementById('legendTitle').innerText = config.title;
-    
-    // Inject rows with the color set directly on the style attribute
+    // Function to search for the layer in a specific metadata file
+    const getTimestamp = async (url) => {
+        try {
+            const resp = await fetch(`${url}?t=${Date.now()}`);
+            const text = await resp.text();
+            const lines = text.split('\n');
+            const match = lines.find(l => l.startsWith(layer));
+            return match ? match.split(',')[1].trim() : null;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    // Check both files sequentially to find the correct layer data
+    (async () => {
+        let isoTime = await getTimestamp('https://jhradartools.duckdns.org/output/2min.txt');
+        
+        // If not found in 2min (radar), check hourly (rainfall)
+        if (!isoTime) {
+            isoTime = await getTimestamp('https://jhradartools.duckdns.org/output/hourly.txt');
+        }
+
+        if (isoTime) {
+            const dateObj = new Date(isoTime); // Automatically converts UTC to Local Time
+            
+            // Format: HH:MM AM/PM TZ MM/DD/YY
+            const timeStr = dateObj.toLocaleTimeString([], { 
+                hour: 'numeric', 
+                minute: '2-digit', 
+                timeZoneName: 'short' 
+            });
+            const dateStr = dateObj.toLocaleDateString([], {
+                month: '2-digit', day: '2-digit', year: '2-digit'
+            });
+
+            window.activeLayerTimestamp = ` AS OF ${timeStr} ${dateStr}`;
+        } else {
+            window.activeLayerTimestamp = "";
+        }
+
+        // Apply title + timestamp to the HTML UI
+        document.getElementById('legendTitle').innerText = config.title + window.activeLayerTimestamp;
+    })();
+
+    // Render legend items from COG_CONFIG
     document.getElementById('legendItems').innerHTML = config.steps.map(s => `
         <div class="legend-row">
             <div class="legend-color" style="background-color: ${s.color};"></div>
@@ -3048,7 +3177,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
     // --- COG DATA LOADING ---
     if (folder === 'cog') {
         const loadCOG = async () => {
-            const url = `https://jhradartools.duckdns.org/output/${layer}_southeast_cog.tif?t=${Date.now()}`;
+            const url = `https://jhradartools.duckdns.org/output/mrms_${layer}_southeast_cog.tif?t=${Date.now()}`;
             const refreshId = `cog-${Date.now()}`;
             
             try {
@@ -3071,9 +3200,13 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
                         // FUTURE PROOF: Pick ramp based on layer
                         let rgba;
                         if (layer.includes('mesh')) {
-                            rgba = colorRampHail(val); // You'd define this later
+                            rgba = colorRampHail(val);
+                        } else if (layer.match(/6h|12h|24h/)) {
+                            // Use the new extended ramp for multi-hour durations
+                            rgba = colorRampExtendedQPE(val / 25.4); 
                         } else {
-                             rgba = colorRamponeHRMRMR(val / 25.4); // Standard Rain
+                            // Keep standard ramp for 1h or others
+                            rgba = colorRamponeHR(val / 25.4);
                         }
 
                         if (!rgba) {
@@ -3107,7 +3240,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
                     type: "raster",
                     source: `${refreshId}-source`,
                     paint: { 'raster-resampling': 'nearest', 'raster-opacity': 0.9 }
-                }, 'spotlight-layer');
+                }, 'radar');
 
                 map.once('idle', () => {
                     map.getStyle().layers.forEach(l => {
@@ -3212,6 +3345,7 @@ warningBtn.onclick = () => {
     } else {
         warningBtn.classList.remove('active');
         warningBtn.style.color = '';
+        closeWarningPopup();
     }
 };
 editableText.addEventListener('keydown', (e) => {
@@ -3365,23 +3499,6 @@ function makePopupDraggable(id) {
     });
 }
 
-// Ensure toggle logic uses the dual-layer control
-document.getElementById('warningToggle').onclick = () => {
-    warningsVisible = !warningsVisible;
-    const visibility = warningsVisible ? 'visible' : 'none';
-    map.setLayoutProperty('warnings-shading', 'visibility', visibility);
-    map.setLayoutProperty('warnings-border', 'visibility', visibility);
-    map.setLayoutProperty('warnings-border-case', 'visibility', visibility);
-    const btn = document.getElementById('warningToggle');
-    if (warningsVisible) {
-        btn.classList.add('active');
-        btn.style.color = '#ff4444';
-        updateWarnings();
-    } else {
-        btn.classList.remove('active');
-        btn.style.color = '';
-    }
-};
 
 setInterval(updateWarnings, 120000);
 
@@ -3454,71 +3571,7 @@ function updateCardVisibility() {
         card.style.display = 'none';
     }
 }
-function colorRamponeHRMRMR(inches) {
-    if (inches < 0.01) return null; // No precipitation
 
-    // Cyan/Blue range (0.01 - 0.20)
-    if (inches < 0.05) return [102, 235, 232, 255];
-    if (inches < 0.10) return [84, 203, 232, 255];
-    if (inches < 0.15) return [74, 164, 236, 255];
-    if (inches < 0.20) return [30, 80, 238, 255];
-
-    // Green range (0.20 - 1.25)
-    if (inches < 0.40) return [110, 243, 67, 255];
-    if (inches < 0.60) return [76, 212, 53, 255];
-    if (inches < 0.80) return [56, 178, 41, 255];
-    if (inches < 1.00) return [45, 143, 31, 255];
-
-    // Yellow/Gold/Brown range (1.00 - 2.50)
-    if (inches < 1.25) return [251, 250, 49, 255];
-    if (inches < 1.50) return [244, 211, 48, 255];
-    if (inches < 1.75) return [229, 180, 46, 255];
-    if (inches < 2.00) return [198, 134, 38, 255];
-    if (inches < 2.50) return [233, 155, 148, 255];
-
-    // Red range (2.50 - 4.50)
-    if (inches < 3.00) return [229, 81, 71, 255];
-    if (inches < 3.50) return [209, 36, 31, 255];
-    if (inches < 4.00) return [167, 30, 24, 255];
-
-    // Purple/Magenta range (4.00 - 6.50)
-    if (inches < 4.50) return [233, 50, 232, 255];
-    if (inches < 5.00) return [175, 40, 185, 255];
-    if (inches < 5.50) return [143, 33, 151, 255];
-    if (inches < 6.00) return [104, 24, 110, 255];
-
-    // White/Light Blue/Cream (6.00+)
-    if (inches < 6.50) return [255, 255, 255, 255];
-    if (inches < 7.00) return [193, 201, 247, 255];
-    if (inches < 8.00) return [223, 253, 253, 255];
-    
-    return [255, 255, 194, 255]; // 8.0+ (Cream)
-}
-function colorRampHail(mm) {
-    const inches = mm / 25.4; 
-    if (inches < 0.25) return null; // Noise floor
-
-    // BLUE TO GREEN (Sub-Severe)
-    if (inches < 0.50) return [1, 160, 246, 255];   // 0.25" - Blue (#01a0f6)
-    if (inches < 1.00) return [0, 236, 236, 255];   // 0.50" - Light Cyan (#00ecec)
-    
-    // YELLOW AT 1.00" (Severe Milestone: Quarter)
-    if (inches < 1.50) return [255, 255, 0, 255];   // 1.00" - Yellow (#ffff00)
-    if (inches < 1.75) return [255, 144, 0, 255];   // 1.50" - Orange (#ff9000)
-
-    // RED AT 1.75" (Severe Milestone: Golf Ball)
-    if (inches < 2.00) return [255, 0, 0, 255];     // 1.75" - Red (#ff0000)
-    
-    // MAROON AT 2.00" (Hen Egg)
-    if (inches < 2.50) return [128, 0, 0, 255];     // 2.00" - Maroon (#800000)
-
-    // PURPLE / MAGENTA BY 2.50" (Tennis Ball)
-    if (inches < 3.00) return [255, 0, 255, 255];   // 2.50" - Magenta (#ff00ff)
-    if (inches < 4.00) return [153, 85, 201, 255];  // 3.00" - Purple (#9955c9)
-
-    // WHITE BY 4.00" (Softball+)
-    return [255, 255, 255, 255];                    // 4.00"+ - White (#ffffff)
-}
 
 // 1. Define a function to draw the bolt on a tiny hidden canvas
 function createBoltIcon() {
@@ -3605,9 +3658,9 @@ setTimeout(() => {
 // --- LIGHTNING TOGGLE LOGIC ---
 // --- LIGHTNING TOGGLE & SMART REFRESH ---
 const lightningBtn = document.getElementById('lightningToggle');
-let lightningVisible = true; 
+let lightningVisible = false; 
 
-lightningBtn.classList.add('active');
+//lightningBtn.classList.add('active');
 
 lightningBtn.onclick = () => {
     lightningVisible = !lightningVisible;

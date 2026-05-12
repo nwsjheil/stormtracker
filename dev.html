@@ -517,6 +517,12 @@ body{
     color: white !important;
     border-color: #6ae6ff;
 }
+#lightningToggle.active {
+    background: #fde047 !important; /* Bright Yellow */
+    color: #000000 !important;
+    border-color: #ffffff;
+    box-shadow: 0 0 10px rgba(253, 224, 71, 0.5);
+}
 </style>
 </head>
 
@@ -622,6 +628,9 @@ body{
         <div class="tool-group">
             <div class="tool" id="warningToggle">WARNINGS</div>
         </div>
+        <div class="tool-group">
+    <div class="tool" id="lightningToggle" style="font-size: 16px;">⚡</div>
+</div>
     </div>
 
 </div>
@@ -854,6 +863,8 @@ map.on('load', () => {
         type: 'vector',
         tiles: ['https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf']
     });
+    const boltData = createBoltIcon();
+    map.addImage('lightning-bolt', boltData);
 
     const shields = [
         ['i-4', '4.png'],
@@ -1104,16 +1115,7 @@ if (popupEl) {
         }    
     });
 
-map.addLayer({
-    id: 'spotlight-layer',
-    type: 'fill',
-    source: 'drawings',
-    filter: ['==', ['get', 'kind'], 'spotlight'],
-    paint: {
-        'fill-color': '#000000',
-        'fill-opacity': 0.7 // Make it darker for better effect
-    }
-});
+
 
     // 2. Add Shading Layer (BELOW radar)
  map.addLayer({
@@ -1684,6 +1686,52 @@ map.addLayer({
         'text-color': '#fffca3',
         'text-halo-color': '#1a1a1a', 
         'text-halo-width': 3
+    }
+});
+
+    // Add this to your map.on('load')
+map.addSource('lightning-data', {
+    type: 'geojson',
+    data: 'https://jhradartools.duckdns.org/output/lightning.json'
+});
+
+// The Glow
+    map.addLayer({
+        id: 'lightning-glow',
+        type: 'circle',
+        source: 'lightning-data',
+        paint: {
+            'circle-color': [
+                'step',
+                ['coalesce', ['get', 'density'], 0],
+                '#FFFFFF', 1.0, '#FFFF00', 3.0, '#FF0000'
+            ],
+            'circle-radius': ['step', ['get', 'density'], 10, 1.0, 15, 3.0, 22],
+            'circle-blur': 0.8,
+            'circle-opacity': 0.6
+        }
+    });
+
+    // The Icon
+    map.addLayer({
+        id: 'lightning-icon',
+        type: 'symbol',
+        source: 'lightning-data',
+        layout: {
+            'icon-image': 'lightning-bolt',
+            'icon-size': 0.4, // Adjust this to make the bolt bigger/smaller
+            'icon-allow-overlap': true
+        }
+    });
+
+map.addLayer({
+    id: 'spotlight-layer',
+    type: 'fill',
+    source: 'drawings',
+    filter: ['==', ['get', 'kind'], 'spotlight'],
+    paint: {
+        'fill-color': '#000000',
+        'fill-opacity': 0.5 // Make it darker for better effect
     }
 });
 
@@ -3465,6 +3513,35 @@ function colorRampHail(mm) {
     // WHITE BY 4.00" (Softball+)
     return [255, 255, 255, 255];                    // 4.00"+ - White (#ffffff)
 }
+
+// 1. Define a function to draw the bolt on a tiny hidden canvas
+function createBoltIcon() {
+    const size = 64; // resolution of the icon
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Draw the lightning shape
+    ctx.beginPath();
+    ctx.moveTo(35, 5);  // Top point
+    ctx.lineTo(15, 35); // Middle left
+    ctx.lineTo(30, 35); // Middle notch
+    ctx.lineTo(25, 60); // Bottom point
+    ctx.lineTo(45, 25); // Middle right
+    ctx.lineTo(30, 25); // Middle notch
+    ctx.closePath();
+
+    // Fill with white and give it a black outline
+    ctx.fillStyle = 'white';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    return ctx.getImageData(0, 0, size, size);
+}
+
 window.addEventListener('keydown', (e) => {
     // 1. Safety check: Don't fire if typing in text boxes
 if (document.activeElement.tagName === 'INPUT' || 
@@ -3519,6 +3596,47 @@ if (document.activeElement.tagName === 'INPUT' ||
 setTimeout(() => {
     document.querySelector('.toolbar').classList.add('dim');
 }, 7000);
+// --- LIGHTNING TOGGLE LOGIC ---
+// --- LIGHTNING TOGGLE & SMART REFRESH ---
+const lightningBtn = document.getElementById('lightningToggle');
+let lightningVisible = true; 
+
+lightningBtn.classList.add('active');
+
+lightningBtn.onclick = () => {
+    lightningVisible = !lightningVisible;
+    const visibility = lightningVisible ? 'visible' : 'none';
+    
+    if (map.getLayer('lightning-glow')) {
+        map.setLayoutProperty('lightning-glow', 'visibility', visibility);
+    }
+    if (map.getLayer('lightning-icon')) {
+        map.setLayoutProperty('lightning-icon', 'visibility', visibility);
+    }
+    
+    if (lightningVisible) {
+        lightningBtn.classList.add('active');
+        // Trigger an immediate update when turned back on so data isn't stale
+        updateLightningData(); 
+    } else {
+        lightningBtn.classList.remove('active');
+    }
+};
+
+// Isolated function for updating data
+function updateLightningData() {
+    // Check visibility BEFORE requesting
+    if (!lightningVisible) return; 
+
+    const source = map.getSource('lightning-data');
+    if (source) {
+        console.log("Fetching fresh lightning data...");
+        source.setData(`https://jhradartools.duckdns.org/output/lightning.json?t=${Date.now()}`);
+    }
+}
+
+// Set the interval to call our "Smart" function
+setInterval(updateLightningData, 60000);
 </script>
 </body>
 </html>

@@ -21,6 +21,7 @@ rel="stylesheet"
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl-cog-protocol@1.0.0/dist/index.browser.js"></script>
 <script src="https://unpkg.com/georaster"></script>
 <script src="legend.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 
 :root{
@@ -2850,6 +2851,14 @@ window.addEventListener('mouseup', () => {
 });
 
 document.getElementById('exportBtn').onclick = () => {
+    // Check for NOAA account
+    if (!userEmail || !userEmail.endsWith('@noaa.gov')) {
+        alert("Export Restricted: Please sign in with your @noaa.gov account.");
+        
+        // Trigger the sign-in prompt if not logged in
+        google.accounts.id.prompt(); 
+        return;
+    }
     const vf = document.getElementById('exportViewfinder');
     const ui = document.getElementById('exportUI');
     const card = document.getElementById('draggableCard');
@@ -3890,6 +3899,30 @@ opSlider.oninput = (e) => {
             map.setPaintProperty(layer.id, 'raster-opacity', val);
         }
     });
+};
+let userEmail = null;
+
+function handleCredentialResponse(response) {
+    const payload = JSON.parse(atob(response.credential.split('.')[1]));
+    userEmail = payload.email;
+    
+    if (userEmail.endsWith('@noaa.gov')) {
+        console.log("Access Granted: " + userEmail);
+    } else {
+        alert("Access Denied: You must use an @noaa.gov account to export.");
+        userEmail = null;
+    }
+}
+
+window.onload = function () {
+    google.accounts.id.initialize({
+        client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com", // Replace with your ID
+        callback: handleCredentialResponse
+    });
+    google.accounts.id.renderButton(
+        document.getElementById("googleSignInBtn"), // You'll need a div for this
+        { theme: "outline", size: "large" }
+    );
 };
 </script>
 </body>

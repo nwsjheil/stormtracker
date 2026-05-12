@@ -21,7 +21,6 @@ rel="stylesheet"
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl-cog-protocol@1.0.0/dist/index.browser.js"></script>
 <script src="https://unpkg.com/georaster"></script>
 <script src="legend.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 
 :root{
@@ -2850,15 +2849,35 @@ window.addEventListener('mouseup', () => {
     isDraggingUI = false;
 });
 
-document.getElementById('exportBtn').onclick = () => {
-    // Check for NOAA account
-    if (!userEmail || !userEmail.endsWith('@noaa.gov')) {
-        alert("Export Restricted: Please sign in with your @noaa.gov account.");
-        
-        // Trigger the sign-in prompt if not logged in
-        google.accounts.id.prompt(); 
-        return;
+document.getElementById('exportBtn').onclick = async () => {
+    // 1. Check if already authenticated in this session
+    if (sessionStorage.getItem('exportAuthorized') === 'true') {
+        isSampleMode = false; // Disable eyedropper before export
+        return startExportFlow();
     }
+
+    const input = prompt("Enter NOAA Authorization Key to Export (Once per session):");
+    if (!input) return;
+
+    // 2. Generate SHA-256 hash
+    const msgBuffer = new TextEncoder().encode(input);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // 3. Compare to your master hash
+    const masterHash = "b706305236242b0181d490002cc61629b42111dd9c567e2888183aec242d32bd";
+
+    if (hashHex === masterHash) {
+        sessionStorage.setItem('exportAuthorized', 'true'); // Remember for this session
+        isSampleMode = false;
+        startExportFlow();
+    } else {
+        alert("Invalid Authorization Key.");
+    }
+};
+
+function startExportFlow() {
     const vf = document.getElementById('exportViewfinder');
     const ui = document.getElementById('exportUI');
     const card = document.getElementById('draggableCard');
@@ -3899,30 +3918,6 @@ opSlider.oninput = (e) => {
             map.setPaintProperty(layer.id, 'raster-opacity', val);
         }
     });
-};
-let userEmail = null;
-
-function handleCredentialResponse(response) {
-    const payload = JSON.parse(atob(response.credential.split('.')[1]));
-    userEmail = payload.email;
-    
-    if (userEmail.endsWith('@noaa.gov')) {
-        console.log("Access Granted: " + userEmail);
-    } else {
-        alert("Access Denied: You must use an @noaa.gov account to export.");
-        userEmail = null;
-    }
-}
-
-window.onload = function () {
-    google.accounts.id.initialize({
-        client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com", // Replace with your ID
-        callback: handleCredentialResponse
-    });
-    google.accounts.id.renderButton(
-        document.getElementById("googleSignInBtn"), // You'll need a div for this
-        { theme: "outline", size: "large" }
-    );
 };
 </script>
 </body>

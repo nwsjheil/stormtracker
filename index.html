@@ -16,7 +16,10 @@ rel="stylesheet"
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl-cog-protocol@1.0.0/dist/index.browser.js"></script>
+<script src="https://unpkg.com/georaster"></script>
+<script src="legend.js"></script>
 <style>
 
 :root{
@@ -49,15 +52,24 @@ body{
     flex-direction: column;
     gap: 8px;
     z-index: 20;
+    background: rgba(0, 49, 88, 0.45);
+    padding: 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(7px);
+    border: 3px solid rgba(255, 255, 255, 0.2);
 
-    /* Add these lines */
-    background: rgba(0, 49, 88, 0.45); /* Dark blue with 75% opacity */
-    padding: 10px;                     /* Added padding so the bg is visible around items */
-    border-radius: 12px;               /* Smoothes the corners */
-    backdrop-filter: blur(7px);       /* Optional: creates a frosted glass effect */
-    border: 3px solid rgba(255, 255, 255, 0.2); /* Subtle border to define the edge */
+    opacity: 1;
+    transition: opacity 0.3s ease-in-out;
 }
 
+/* after 7s fade down */
+.toolbar.dim {
+    opacity: 0.5;
+}
+
+.toolbar:hover {
+    opacity: 1;
+}
 /* row system */
 .toolbar-row{
     display:flex;
@@ -91,6 +103,7 @@ body{
     font-weight:800;
     cursor:pointer;
     white-space:nowrap;
+    text-align:center;
 }
 
 .tool.active{
@@ -430,6 +443,86 @@ body{
 .custom-warning-popup:hover .close-warn-btn {
     opacity: 1 !important;
 }
+#cogLegend {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(169, 231, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: white;
+    font-family: 'Roboto', sans-serif;
+    display: none;
+    z-index: 10;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    pointer-events: none;
+    /* Skinny Bar Layout */
+    width: auto;
+    max-width: fit-content;
+}
+
+.legend-title {
+    font-size: 9px;
+    font-weight: 900;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    color: #a9e7ff;
+    letter-spacing: 0.5px;
+}
+
+#legendItems {
+    display: flex; /* Horizontal alignment */
+    flex-direction: row;
+    gap: 15px; /* Spacing between items */
+    align-items: center;
+}
+
+.legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.legend-color {
+    width: 12px;  /* Explicit width */
+    height: 12px; /* Explicit height */
+    border-radius: 2px;
+    display: inline-block; /* Ensure it renders */
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Normal state: pinned to the browser window */
+#cogLegend.app-mode {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    display: none; /* JS will show this */
+    z-index: 100;
+}
+
+#cogLegend.preview-mode {
+    position: absolute;
+    bottom: 20px; 
+    right: 20px;
+    z-index: 9999 !important; /* Forces it above the viewfinder shadow */
+}
+
+[contenteditable="true"] {
+    cursor: text !important;
+}
+
+/* Add this near your other .tool styles around line 120 */
+#idModeBtn.active {
+    background: #3c7bba !important;
+    color: white !important;
+    border-color: #6ae6ff;
+}
+#lightningToggle.active {
+    background: #fde047 !important; /* Bright Yellow */
+    color: #000000 !important;
+    border-color: #ffffff;
+    box-shadow: 0 0 10px rgba(253, 224, 71, 0.5);
+}
 </style>
 </head>
 
@@ -454,7 +547,8 @@ body{
         </div>
 <div class="tool-group">
     <div class="tool" id="drawBtn">DRAW</div>
-    <div class="tool" id="spotBtn">SPOT</div>
+    <div class="tool" id="spotBtn">SPOT</div>       
+    <div class="tool" id="idModeBtn">ID<br>ROADS</div>
     <div class="tool erase-btn" id="eraseBtn">ERASE</div>
 </div>
 
@@ -503,6 +597,10 @@ body{
                     <option value="kfll|kfll_bref1">FLL</option>
                     <option value="ktpa|ktpa_bref1">TPA</option>
                 </optgroup>
+                <optgroup label="MRMS">
+    <option value="cog|mrms_1h_qpe">1H QPE (exp)</option>
+    <option value="cog|mrms_mesh">Hail Size (exp)</option>
+</optgroup>
                 <optgroup label="Satellite">
 <option value="sat|goes_visible_imagery">VIS</option>
     <option value="sat|goes_longwave_imagery">IR</option>
@@ -517,20 +615,22 @@ body{
             <button class="dur-btn active" data-mins="60">1h</button>
             <button class="dur-btn" data-mins="120">2h</button>
         </div>
-        <div class="tool-group">
-            <div class="tool" id="warningToggle">WARNINGS</div>
-        </div>
         <!-- FAN WIDTH -->
         <div class="tool-group" id="widthContainer">
             <span style="font-size:10px; color:#94a3b8;">FAN</span>
             <input type="range" id="widthSlider" min="20" max="50" value="30">
             <span id="widthVal" style="font-size:15px; color:#94a3b8;">30</span>
         </div>
-
         <div class="tool-group">
             <div class="tool danger-btn" id="clearBtn">CLEAR<br>TRACK</div>
         </div>
 
+        <div class="tool-group">
+            <div class="tool" id="warningToggle">WARNINGS</div>
+        </div>
+        <div class="tool-group">
+    <div class="tool" id="lightningToggle" style="font-size: 16px;">⚡</div>
+</div>
     </div>
 
 </div>
@@ -547,6 +647,10 @@ body{
     </div>
     <div id="impacts"></div>
 </div>
+<div id="cogLegend" class="app-mode">
+    <div class="legend-title" id="legendTitle">DATA LEGEND</div>
+    <div id="legendItems"></div>
+</div>
 
 <div class="help" id="help">
 
@@ -554,7 +658,7 @@ body{
     CLICK + DRAG TO TRACK
 
 </div>
-<div id="customTextBox" style="display:none; position:absolute; top:40%; left:40%; z-index:200; padding:10px; border-radius:12px; background:rgba(138, 64, 0, 0.6); border:2px solid var(--accent); backdrop-filter:blur(8px); min-width:200px;">
+<div id="customTextBox" style="display:none; position:absolute; top:40%; left:40%; z-index:200; padding:10px; border-radius:12px; background:rgba(204, 109, 0, 0.8); border:2px solid var(--accent); backdrop-filter:blur(8px); min-width:200px;">
     
     <div id="textDragHandle" style="height:14px; cursor:move; background:rgba(255,255,255,0.1); border-radius:4px; margin-bottom:8px; display:flex; justify-content:center; align-items:center;">
         <div style="width:30px; height:2px; background:rgba(255,255,255,0.3); border-radius:2px;"></div>
@@ -564,7 +668,7 @@ body{
     
     <div id="textControls" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; background:rgba(0,0,0,0.4); padding:8px; border-radius:8px; align-items:center;">
         <input type="color" id="fontColor" value="#ffffff" title="Text Color" style="width:22px; height:22px; border:none; background:none; cursor:pointer;">
-        <input type="color" id="bgColor" value="#8a3c00" title="Background Color" style="width:22px; height:22px; border:none; background:none; cursor:pointer;">
+        <input type="color" id="bgColor" value="#cc6d00" title="Background Color" style="width:22px; height:22px; border:none; background:none; cursor:pointer;">
         
         <select id="fontSize" onchange="formatDoc('fontSize', this.value)" style="background:#1e293b; color:white; border:none; border-radius:4px; font-size:11px; padding:2px;">
             <option value="3">Small</option>
@@ -605,11 +709,12 @@ body{
 </div>
 <script>
 let coneWidth = 30; // Default width
+let isExportMode = false;
 const widthSlider = document.getElementById('widthSlider');
 const widthVal = document.getElementById('widthVal');
 // Change this at the top of your <script>
 let selectedDuration = 60; // Default to 1 Hour (60 mins)
-
+let cogRefreshInterval = null;
 document.querySelectorAll('.dur-btn').forEach(btn => {
     btn.onclick = (e) => {
         // 1. Update active UI state
@@ -661,42 +766,20 @@ widthSlider.oninput = (e) => {
     }
 };
 const map = new maplibregl.Map({
-
-    container:'map',
-    preserveDrawingBuffer: true, // REQUIRED FOR PNG EXPORT
-    style:{
-        version:8,
-glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-sources: {
-'esri-dark-base': {
-        type: 'raster',
-        tiles: ['https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256,
-        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
-    },
-    'esri-dark-labels': {
-        type: 'raster',
-        tiles: ['https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256
+    container: 'map',
+    preserveDrawingBuffer: true,
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json',
+    center: [-81.4, 28.5],
+    zoom: 7,
+transformRequest: (url, resourceType) => {
+        if (resourceType === 'Glyphs') {
+            // This redirects font requests from CartoDB to OpenFreeMap's server
+            return {
+                url: url.replace('https://tiles.basemaps.cartocdn.com/fonts', 'https://tiles.openfreemap.org/fonts')
+            };
+        }
+        return { url: url };
     }
-},
-layers: [
-{
-        id: 'base-layer',
-        type: 'raster',
-        source: 'esri-dark-base'
-    },
-//    {
-//        id: 'labels-layer',
-//        type: 'raster',
-//        source: 'esri-dark-labels'
-//    }
-]
-    },
-
-    center:[-81.4,28.5],
-    zoom:7
-
 });
 
 let mode = 'pan';
@@ -714,7 +797,8 @@ let dragging = false;
 let edgeLocked = false;
 
 let startPoint = null;
-
+let isIdMode = false;
+let activeLabels = []; // Your array of "stuck" road names
 let stormLine = [];
 let lastETALine = null;
 let etaLabels = [];
@@ -740,11 +824,47 @@ const spotBtn = document.getElementById('spotBtn');
 ========================================= */
 
 map.on('load', () => {
+
+    const layers = map.getStyle().layers;
+
+    layers.forEach(layer => {
+        // Target anything that is a road, bridge, tunnel, or transit line
+        const isRoad = layer.id.includes('road') || 
+                       layer.id.includes('bridge') || 
+                       layer.id.includes('tunnel') ||
+                       layer.id.includes('highway') ||
+                       layer.id.includes('transit');
+
+        if (isRoad) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+        }
+    });
+
+    // Check if the background layer exists and change it to dark gray
+    if (map.getLayer('background')) {
+        map.setPaintProperty('background', 'background-color', '#474749');
+    }
+    
+    // Optional: If there are water layers, make them a slightly different gray
+    if (map.getLayer('water')) {
+        map.setPaintProperty('water', 'fill-color', '#232227');
+    }   
+    if (map.getLayer('park_nature_reserve')) {
+        map.setPaintProperty('park_nature_reserve', 'fill-color', '#474749');
+    }
+    if (map.getLayer('landuse_residential')) {
+        map.setPaintProperty('landuse_residential', 'fill-color', '#515153');
+    }
+    if (map.getLayer('landcover')) {
+        map.setPaintProperty('landcover', 'fill-color', '#474749');
+    }
     // 1. Define the Vector Source
     map.addSource('esri-base', {
         type: 'vector',
         tiles: ['https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf']
     });
+    const boltData = createBoltIcon();
+    map.addImage('lightning-bolt', boltData);
 
     const shields = [
         ['i-4', '4.png'],
@@ -784,7 +904,7 @@ map.on('load', () => {
         });
 
     });
-
+console.log(map.getStyle().layers);
 
     // 2. Define the Radar Source
     map.addSource('radar', {
@@ -832,8 +952,12 @@ map.on('click', 'warnings-shading', (e) => {
     // 4. Force the repaint
     applyWarningIsolation();
 
+
+
 const props = feat.properties;
 const warnId = props.id;
+
+
 
 // 1. DEFINE EXPIRESTR FIRST (The missing piece)
 const expireDate = new Date(props.ends || props.expires);
@@ -879,35 +1003,43 @@ const hailDesc = rawHail ? getHailDescription(rawHail) : null;
 const hail = rawHail ? `${rawHail}" ${hailDesc}` : null; // This defines 'hail'
 
 // Flood/Tornado/Water Hazards
-const torn = props.tornadoDetection ? `Tornado: ${props.tornadoDetection}` : null;
-const water = params.waterspoutDetection && params.waterspoutDetection[0] ? `Waterspout: ${params.waterspoutDetection[0]}` : null;
+const torn = props.tornadoDetection ? `TORNADO ${props.tornadoDetection}` : null;
+const water = params.waterspoutDetection && params.waterspoutDetection[0] ? `WATERSPOUT ${params.waterspoutDetection[0]}` : null;
 const ffDetection = params.flashFloodDetection ? params.flashFloodDetection[0] : null;
 const ffThreat = params.flashFloodDamageThreat ? params.flashFloodDamageThreat[0] : null;
 
 // 2. Update the HTML Template (around line 485)
 // Ensure every variable used here is defined above
 const popupHtml = `
-    <div id="warn-popup-${warnId}" class="movable-popup" style="width:280px; padding:12px; font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44;">
+    <div id="warn-popup-${warnId}" class="movable-popup" style="width:300px; padding:12px; cursor: default;font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
         <div class="popup-handle" style="cursor:move; height:14px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:flex-end; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
-            <button class="close-warn-btn" onclick="closeWarningPopup()" style="background:rgba(0,0,0,0.2); color:${iconColor}; border:1px solid rgba(0,0,0,0.1); border-radius:4px; width:22px; height:22px; cursor:pointer; font-weight:bold; opacity:0; transition:opacity 0.2s; display:flex; align-items:center; justify-content:center; font-size:11px;">✕</button>
+            <button class="close-warn-btn" onclick="closeWarningPopup()" style="background:rgba(0,0,0,0.2); color:${iconColor}; border:1px solid rgba(0,0,0,0.1); border-radius:4px; width:22px; height:22px; cursor:text; font-weight:bold; opacity:0; transition:opacity 0.2s; display:flex; align-items:center; justify-content:center; font-size:11px;">✕</button>
+        </div>
+
+        <div class="warn-edit-tools" style="display:none; gap:5px; padding:8px 0; border-bottom:1px solid #eee; margin-bottom:5px; justify-content:center;">
+            <button onclick="document.execCommand('bold', false, null)" style="width:24px; height:24px; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; font-weight:bold;">B</button>
+            <button onclick="document.execCommand('italic', false, null)" style="width:24px; height:24px; cursor:pointer; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; font-style:italic;">I</button>
+            <input type="color" oninput="document.execCommand('foreColor', false, this.value)" style="width:24px; height:24px; border:none; padding:0; background:none; cursor:pointer;">
         </div>
 
         <div style="padding-top:10px;">
-            <b style="color:#b91c1c; text-transform:uppercase; font-size:15px; display:block; margin-bottom:2px;">${props.event}</b>
-            <div style="font-size:12px; color:#334155; margin-bottom:6px;"><b>Ends:</b> ${expireStr}</div>
+            <b contenteditable="true" class="edit-target" style="color:#b91c1c; text-transform:uppercase; font-size:18px; display:block; margin-bottom:2px; outline:none;">${props.event}</b>
+            <div contenteditable="true" style="font-size:12px; color:#334155; margin-bottom:6px;"><b>Ends:</b> ${expireStr}</div>
             
             ${(wind || hail || torn || water || ffDetection || ffThreat) ? `
             <div style="background:#fff1f2; border:1px solid #fecaca; padding:8px; border-radius:6px; margin:5px 0;">
                 <b style="color:#991b1b; font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">Hazards</b>
-                ${wind ? `<div style="font-size:12px;">Wind: ${wind}</div>` : ''}
-                ${hail ? `<div style="font-size:12px;">Hail: ${hail}</div>` : ''}
-                ${ffDetection ? `<div style="font-size:12px;">Detection: ${ffDetection}</div>` : ''}
-                ${ffThreat ? `<div style="font-size:12px;">Threat: ${ffThreat}</div>` : ''}
-                ${torn ? `<div style="font-size:12px;">${torn}</div>` : ''}
-                ${water ? `<div style="font-size:12px;">${water}</div>` : ''}
+                <div contenteditable="true" class="edit-target" style="outline:none;">
+                    ${torn ? `<div style="font-size:12px; color: #a855f7;"><b>${torn}</b></div>` : ''}
+                    ${wind ? `<div style="font-size:12px;"><b>Wind:</b> ${wind}</div>` : ''}
+                    ${hail ? `<div style="font-size:12px;"><b>Hail:</b> ${hail}</div>` : ''}
+                    ${ffDetection ? `<div style="font-size:12px;"><b>Detection:</b> ${ffDetection}</div>` : ''}
+                    ${ffThreat ? `<div style="font-size:12px;"><b>Threat:</b> ${ffThreat}</div>` : ''}
+                    ${water ? `<div style="font-size:12px; color: #a855f7;"><b>${water}</b></div>` : ''}
+                </div>
             </div>` : ''}
 
-            <div style="max-height:70px; overflow-y:auto; border-top:1px solid #e2e8f0; padding-top:6px; font-size:12px; color:#64748b; line-height:1.3;">
+            <div contenteditable="true" class="edit-target" style="max-height:120px; overflow-y:auto; border-top:1px solid #e2e8f0; padding-top:6px; font-size:12px; color:#64748b; line-height:1.3; outline:none;">
                 <b>Areas:</b> ${props.areaDesc}
             </div>
         </div>
@@ -927,6 +1059,34 @@ const popupHtml = `
             .setLngLat(e.lngLat)
             .setHTML(popupHtml)
             .addTo(map);
+           
+            // 1. Get the element by ID (getElementById is safe for colons/dots)
+const popupEl = document.getElementById(`warn-popup-${warnId}`);
+
+if (popupEl) {
+    const tools = popupEl.querySelector('.warn-edit-tools');
+    const editables = popupEl.querySelectorAll('.edit-target');
+
+    // Show tools when any editable area is focused
+    editables.forEach(el => {
+        el.onfocus = () => { tools.style.display = 'flex'; };
+        // Hide tools when clicking away (with a small delay to allow button clicks)
+        el.onblur = () => { 
+            setTimeout(() => {
+                if (!popupEl.contains(document.activeElement)) {
+                    tools.style.display = 'none';
+                }
+            }, 200);
+        };
+    });
+    // 2. Prevent map interaction when clicking inside editable areas
+    popupEl.addEventListener('mousedown', (e) => {
+        // Check if the click target or its parent is editable
+        if (e.target.closest('[contenteditable="true"]')) {
+            e.stopPropagation();
+        }
+    }, true); // Use capture phase to ensure we catch it before the map
+}
 
         popup.on('close', () => resetWarningIsolation());
         makePopupDraggable(`warn-popup-${warnId}`);
@@ -955,16 +1115,7 @@ const popupHtml = `
         }    
     });
 
-map.addLayer({
-    id: 'spotlight-layer',
-    type: 'fill',
-    source: 'drawings',
-    filter: ['==', ['get', 'kind'], 'spotlight'],
-    paint: {
-        'fill-color': '#000000',
-        'fill-opacity': 0.7 // Make it darker for better effect
-    }
-});
+
 
     // 2. Add Shading Layer (BELOW radar)
  map.addLayer({
@@ -988,31 +1139,7 @@ map.addLayer({
     }
 }, 'radar');
 
-    // 3. Add Border Layer (ABOVE everything)
-    map.addLayer({
-        id: 'warnings-border',
-        type: 'line',
-        source: 'nws-warnings',
-        layout: { 'visibility': 'none' },
-paint: {
-    'line-color': [
-        'case',
-        ['in', 'Tornado', ['get', 'event']], '#FF0000',
-        ['in', 'Severe Thunderstorm', ['get', 'event']], '#FFFF00',
-        ['in', 'Flash Flood', ['get', 'event']], '#00FF00',
-        ['in', 'Flood Advisory', ['get', 'event']], '#4ade80', // NWS Green
-        ['in', 'Marine', ['get', 'event']], '#FFA500',
-        ['in', 'Statement', ['get', 'event']], '#D2B48C',
-        '#FFFFFF'
-    ],
-    'line-width': 7,
-    'line-opacity': [
-        'case',
-        ['boolean', ['feature-state', 'selected'], false], 1, // Highlighted
-        0.1 // Dimmed
-    ]
-        }
-    });
+ 
 
     map.on('zoomend', () => {
         if (lastETALine) {
@@ -1159,19 +1286,19 @@ map.addLayer({
         ['in', ['get', '_symbol'], ['literal', [4,5]]]
     ],
 
-    minzoom: 11,
+    minzoom: 9,
 
     paint: {
 
         // outline
-        'line-color': '#ffffff',
+        'line-color': '#191919',
 
         'line-width': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            11, 1.5,
-            14, 6
+            9, 2,
+            14, 9
         ],
 
         'line-opacity': 0.95
@@ -1189,18 +1316,18 @@ map.addLayer({
         ['in', ['get', '_symbol'], ['literal', [4,5]]]
     ],
 
-    minzoom: 11,
+    minzoom: 9,
 
     paint: {
 
-        'line-color': '#cbd5e1',
+        'line-color': '#acaca7',
 
         'line-width': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            11, 1,
-            14, 4
+            9, 1,
+            14, 7
         ],
 
         'line-opacity': 1
@@ -1323,6 +1450,40 @@ map.addLayer({
             10, 5,
             14, 10
         ]
+    }
+});
+
+   // 3. Add Border Layer (ABOVE everything)
+map.addLayer({
+    id: 'warnings-border-case', // Better name
+    type: 'line',
+    source: 'nws-warnings',
+    layout: { 'visibility': 'none' },
+    paint: {
+        'line-color': '#000000',
+        'line-width': 12, // Wider than the colored line (7) to create the edge
+        'line-opacity': 0  // Hidden until isolation turns it on
+    }
+}); // Force it to stay under the colored border
+    // Replace your warnings-border layer definition with this simple version
+map.addLayer({
+    id: 'warnings-border',
+    type: 'line',
+    source: 'nws-warnings',
+    layout: { 'visibility': 'none' },
+    paint: {
+        'line-color': [
+            'case',
+            ['in', 'Tornado', ['get', 'event']], '#FF0000',
+            ['in', 'Severe Thunderstorm', ['get', 'event']], '#FFFF00',
+            ['in', 'Flash Flood', ['get', 'event']], '#00FF00',
+            ['in', 'Flood Advisory', ['get', 'event']], '#4ade80',
+            ['in', 'Marine', ['get', 'event']], '#FFA500',
+            ['in', 'Statement', ['get', 'event']], '#D2B48C',
+            '#FFFFFF'
+        ],
+        'line-width': 7,
+        'line-opacity': 1 // Default to 1, isolation will dim it
     }
 });
 
@@ -1478,6 +1639,164 @@ map.addLayer({
         'line-opacity': 1
     }
 });
+// 1. The "Brain" - GeoJSON source to store your stamped labels
+map.addSource('persistent-labels', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+});
+
+// 2. The "Hidden Radar" - Invisible layer used only for road name queries
+map.addLayer({
+    id: 'road-shields-hide',
+    type: 'symbol',
+    source: 'esri-base',
+    minzoom: 6, // Ensure it can be "hit" even when zoomed out
+    'source-layer': 'Road/label',
+    layout: {
+        'text-field': ['get', '_name'],
+        'text-font': ['Noto Sans Bold'],
+        
+        // --- MAXIMUM DENSITY OVERDRIVE ---
+        'symbol-placement': 'line',      // Repeats names along the line geometry
+        'symbol-spacing': 20,            // Staps a name every 20px (Very Dense)
+        'text-allow-overlap': true,      // Loads names even if they crowd each other
+        'text-ignore-placement': true,   // Prevents other layers from hiding these names
+        'text-max-angle': 360,           // Keeps names attached even on sharp curves
+        'text-rotation-alignment': 'map' // Aligns invisible text with the road direction
+    },
+    paint: {
+        'text-opacity': 0 // Keep it 100% invisible to the user
+    }
+});
+
+// 3. The "Ink" - The actual white labels that appear when you click
+map.addLayer({
+    id: 'road-id-labels',
+    type: 'symbol',
+    source: 'persistent-labels',
+    layout: {
+        'text-field': ['get', 'roadName'],
+        'text-font': ['Noto Sans Bold'], // Verified font to avoid 404s
+        'text-size': 14,
+        'text-justify': 'center',
+        'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+        'text-radial-offset': 0
+    },
+    paint: {
+        'text-color': '#fffca3',
+        'text-halo-color': '#1a1a1a', 
+        'text-halo-width': 3
+    }
+});
+
+    // Add this to your map.on('load')
+map.addSource('lightning-data', {
+    type: 'geojson',
+    data: 'https://jhradartools.duckdns.org/output/lightning.json'
+});
+
+// The Glow
+    map.addLayer({
+        id: 'lightning-glow',
+        type: 'circle',
+        source: 'lightning-data',
+        paint: {
+            'circle-color': [
+                'step',
+                ['coalesce', ['get', 'density'], 0],
+                '#FFFFFF', 1.0, '#FFFF00', 3.0, '#FF0000'
+            ],
+            'circle-radius': ['step', ['get', 'density'], 10, 1.0, 15, 3.0, 22],
+            'circle-blur': 0.8,
+            'circle-opacity': 0.6
+        }
+    });
+
+    // The Icon
+    map.addLayer({
+        id: 'lightning-icon',
+        type: 'symbol',
+        source: 'lightning-data',
+        layout: {
+            'icon-image': 'lightning-bolt',
+            'icon-size': 0.4, // Adjust this to make the bolt bigger/smaller
+            'icon-allow-overlap': true
+        }
+    });
+
+map.addLayer({
+    id: 'spotlight-layer',
+    type: 'fill',
+    source: 'drawings',
+    filter: ['==', ['get', 'kind'], 'spotlight'],
+    paint: {
+        'fill-color': '#000000',
+        'fill-opacity': 0.5 // Make it darker for better effect
+    }
+});
+
+// --- UNIVERSAL ROAD ID & HOVER LOGIC ---
+
+// Universal helper to find our query layer
+function getRoadLayers() {
+    return map.getStyle().layers
+        .map(l => l.id)
+        .filter(id => id === 'road-shields-hide');
+}
+
+// 1. The Universal Click (Stamp Road Name)
+map.on('click', (e) => {
+    if (!isIdMode) return;
+
+    // Create a 30px search area around the click
+    const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+
+    const features = map.queryRenderedFeatures(box, {
+        layers: ['road-shields-hide']
+    });
+
+    if (features.length > 0) {
+        // Stop the click from opening warning popups
+        e.originalEvent.stopPropagation();
+        
+ // tracker.html around line 999
+const p = features[0].properties;
+let roadName = p._name || p._name_global || p.name || p._ref || p.ref || "Local Road";
+
+        // --- NEW: CLEANUP LOGIC FOR SPECIFIC FL ROADS ---
+        // We use a regex with 'i' (case-insensitive) and handle optional dashes
+        if (/^FL[- ]?5$/i.test(roadName)) {
+            roadName = "US-1";
+        } else if (/^FL[- ]?91$/i.test(roadName)) {
+            roadName = "FL TPKE";
+        } else if (/^FL[- ]?25$/i.test(roadName)) {
+            roadName = "US-27";
+        } else if (/^FL[- ]?9$/i.test(roadName)) {
+            roadName = "I-95";
+        }
+        activeLabels.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+            properties: { roadName: roadName }
+        });
+
+        map.getSource('persistent-labels').setData({
+            type: 'FeatureCollection',
+            features: activeLabels
+        });
+    } 
+});
+
+// 2. The Universal Hover (Cursor Feedback)
+map.on('mousemove', (e) => {
+    if (!isIdMode) return;
+
+    const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+    const features = map.queryRenderedFeatures(box, { layers: ['road-shields-hide'] });
+
+    // Switch to 'help' question mark when near a road, otherwise 'crosshair'
+    map.getCanvas().style.cursor = features.length ? 'help' : 'crosshair';
+});
 
     // Default: Disable dragPan because starting in Cone Mode
     //map.dragPan.disable();
@@ -1605,17 +1924,27 @@ function setMode(nextMode) {
             document.getElementById('help').innerHTML = "TRACKS CLEARED";
             break;
 
-        case 'erase':
-            drawings = [];
-            redrawDrawings();
-            document.getElementById('help').innerHTML = "ALL DRAWINGS CLEARED";
-            applyWarningIsolation();
-            // Snap back to Pan mode after a brief delay
-            setTimeout(() => {
-                setMode('pan');
-            }, 1000);
-            break;
-    }
+            case 'erase':
+                // 1. Clear hand drawings and spotlights
+                drawings = [];
+                redrawDrawings();
+
+                // 2. Clear Road ID labels (The new part)
+                activeLabels = []; 
+                map.getSource('persistent-labels').setData({
+                    type: 'FeatureCollection',
+                    features: []
+                });
+
+                document.getElementById('help').innerHTML = "ALL DRAWINGS & LABELS CLEARED";
+                applyWarningIsolation();
+
+                // Snap back to Pan mode after a brief delay
+                setTimeout(() => {
+                    setMode('pan');
+                }, 1000);
+                break;
+            }
     updateCardVisibility();
 }
 
@@ -1635,6 +1964,29 @@ function clearStorm() {
     applyWarningIsolation();
     updateCardVisibility();
 }
+
+document.getElementById('idModeBtn').onclick = () => {
+    isIdMode = !isIdMode;
+    const btn = document.getElementById('idModeBtn');
+    
+    if (isIdMode) {
+        btn.innerHTML = "ID<br>ROADS";
+        btn.style.backgroundColor = "#3c7bba"; // Red visual cue
+        map.getCanvas().style.cursor = 'help';
+    } else {
+        // --- THE CLEAN SLATE LOGIC ---
+        btn.innerHTML = "ID<br>ROADS";
+        btn.style.backgroundColor = ""; 
+        map.getCanvas().style.cursor = '';
+
+        //activeLabels = []; // Wipe the array
+        //map.getSource('persistent-labels').setData({
+        //    type: 'FeatureCollection',
+        //    features: []
+        //}); // Wipe the map
+    }
+};
+
 /* =========================================
    MOUSEDOWN
 ========================================= */
@@ -1744,14 +2096,13 @@ if(mode === 'draw' && dragging){
             let coords = [...currentDrawing, currentDrawing[0]];
             let line = turf.lineString(coords);
 
-            // 2. Remove "mouse jitter" (Tolerance: higher = smoother/simpler)
-            let simplified = turf.simplify(line, { tolerance: 0.01, highQuality: true });
+            // 1. Simplify the raw "jagged" path first
+            let simplified = turf.simplify(line, { tolerance: 0.005, highQuality: true });
 
-            // 3. Apply the curve with high resolution
-            // Sharpness 0.85 provides a very organic, rounded feel
+            // 2. THEN apply the Bezier curve to the simplified path
             let smoothed = turf.bezierSpline(simplified, { 
                 sharpness: 0.85,
-                resolution: 12000 // Adds more points for a silkier look
+                resolution: 10000 
             });
             
             const world = [[-180, 85], [180, 85], [180, -85], [-180, -85], [-180, 85]];
@@ -1827,10 +2178,20 @@ if (mode === 'manual') {
     }
 
     if ((mode === 'draw' || mode === 'spotlight') && dragging) {
-    currentDrawing.push([e.lngLat.lng, e.lngLat.lat]);
-    redrawDrawings();
-    return;
-}
+        const lastPoint = currentDrawing[currentDrawing.length - 1];
+        const newPoint = [e.lngLat.lng, e.lngLat.lat];
+
+        if (lastPoint) {
+            // Only add the point if the mouse moved more than ~5 pixels
+            // This acts as a "stabilizer" for your hand
+            const dist = turf.distance(lastPoint, newPoint, { units: 'miles' });
+            if (dist < 0.05) return; // Adjust this number to change 'smoothness'
+        }
+
+        currentDrawing.push(newPoint);
+        redrawDrawings();
+        return;
+    }
 });
 
 
@@ -2264,14 +2625,9 @@ document.getElementById('exportBtn').onclick = () => {
     const vf = document.getElementById('exportViewfinder');
     const ui = document.getElementById('exportUI');
     const card = document.getElementById('draggableCard');
-    const txtBox = document.getElementById('customTextBox');
-    
-    // Final Output Configuration
-    const totalW = 1350;
-    const totalH = 759;
-    const bannerH = 120;
-    const mapH = totalH - bannerH;
-
+    const legendEl = document.getElementById('cogLegend');
+    isExportMode = true; // Set the flag
+    updateCardVisibility(); // Trigger the hide immediately
     // 1. Enter Preview Mode
     document.querySelector('.toolbar').style.display = 'none';
     document.getElementById('help').style.display = 'none';
@@ -2279,9 +2635,13 @@ document.getElementById('exportBtn').onclick = () => {
     vf.style.display = 'block';
     ui.style.display = 'flex';
 
-    // Format Timestamp: No leading zeros, lowercase am/pm
-    const now = new Date();
-    // Timestamp: No leading zeros, no seconds, with Time Zone
+    // --- RE-PARENT FOR PREVIEW ---
+    if (legendEl && legendEl.style.display !== 'none') {
+        vf.appendChild(legendEl); 
+        legendEl.classList.remove('app-mode');
+        legendEl.classList.add('preview-mode');
+    }
+
     const ts = new Date().toLocaleString([], { 
         weekday: 'short', month: 'short', day: 'numeric', 
         year: 'numeric', hour: 'numeric', minute: '2-digit', 
@@ -2291,164 +2651,159 @@ document.getElementById('exportBtn').onclick = () => {
     
     setMode('pan');
 
-    if (card) {
-        card.style.setProperty('display', 'none', 'important');
-    }
-
     // --- CANCEL LOGIC ---
     document.getElementById('cancelExport').onclick = () => {
+        const legendEl = document.getElementById('cogLegend');
         vf.style.display = 'none';
         ui.style.display = 'none';
         document.querySelector('.toolbar').style.display = 'flex';
         document.getElementById('help').style.display = 'block';
         card.style.display = 'block';
+        isExportMode = false; 
+        updateCardVisibility();
+
+        if (legendEl) {
+            document.body.appendChild(legendEl); 
+            legendEl.classList.remove('preview-mode');
+            legendEl.classList.add('app-mode');
+        }
+
         if (document.getElementById('textControls')) {
             document.getElementById('textControls').style.display = 'flex';
             document.getElementById('textDragHandle').style.display = 'flex';
         }
     };
 
- document.getElementById('confirmExport').onclick = async () => {
-    ui.style.display = 'none';
+    // --- CONFIRM EXPORT ---
+    document.getElementById('confirmExport').onclick = async () => {
+        ui.style.display = 'none';
+        isExportMode = false; 
+        updateCardVisibility();
+        // --- ALL NECESSARY VARIABLES DEFINED LOCALLY TO PREVENT REFERENCE ERRORS ---
+        // 1. CLEAR ALL EDITING UI
+            const txtBox = document.getElementById('customTextBox');
+            const textControls = document.getElementById('textControls');
+            const textHandle = document.getElementById('textDragHandle');
+            
+            // Hide the specific warning toolbars
+            const allWarnTools = document.querySelectorAll('.warn-edit-tools');
+            allWarnTools.forEach(t => t.style.setProperty('display', 'none', 'important'));
 
-    // Prepare Text Box for clean capture
-    let originalMinWidth, originalWidth;
-    const textControls = document.getElementById('textControls');
-    const textHandle = document.getElementById('textDragHandle');
+            // Hide main text box controls
+            if (txtBox && txtBox.style.display !== 'none') {
+                textControls.style.display = 'none';
+                textHandle.style.display = 'none';
+            }
 
-    if (txtBox.style.display !== 'none') {
-        textControls.style.display = 'none';
-        textHandle.style.display = 'none';
-        originalMinWidth = txtBox.style.minWidth;
-        originalWidth = txtBox.style.width;
-        txtBox.style.minWidth = 'auto';
-        txtBox.style.width = 'fit-content';
+            // Force blur to remove focus outlines/cursors
+            if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
     }
-
-    const rect = vf.getBoundingClientRect();
-    const mapAreaTop = rect.top + bannerH;
-
-    // --- 2X RESOLUTION LOGIC ---
-    const exportScale = 2;
-    const finalW = totalW * exportScale;
-    const finalH = totalH * exportScale;
-    const finalBannerH = bannerH * exportScale;
-
-    const final = document.createElement('canvas');
-    final.width = finalW;
-    final.height = finalH;
-    const ctx = final.getContext('2d');
-
-    // Smooth everything by scaling coordinates
-    ctx.scale(exportScale, exportScale);
-    ctx.textBaseline = "middle";
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    // 1. Draw Banner Background
-    const grad = ctx.createLinearGradient(0, 0, totalW, 0);
-    grad.addColorStop(0, '#001c2b'); 
-    grad.addColorStop(1, '#002c69');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, totalW, bannerH);
-
-    // 2. Draw Header Text (Optimized weights for 2x scale)
-    const textLeftX = 30;
-    const mainTextY = 58;
-
-    ctx.shadowColor = "rgba(0,0,0,0.3)";
-    ctx.shadowBlur = 4; 
-    ctx.font = "600 32px 'Roboto'"; 
-    ctx.fillStyle = '#ffffff';
-    ctx.letterSpacing = "0.5px";
-    ctx.textAlign = "left";
-    ctx.fillText('WEATHER IMPACT', textLeftX, mainTextY);
-
-    const impactWidth = ctx.measureText('WEATHER IMPACT').width;
-    const badgeX = textLeftX + impactWidth + 17;
-    const badgeWidth = 115;
-    const badgeHeight = 40;
-
-    ctx.shadowBlur = 0; 
-    ctx.fillStyle = '#a9e7ff';
-    ctx.beginPath();
-    ctx.roundRect(badgeX, mainTextY - 23, badgeWidth, badgeHeight, 6);
-    ctx.fill();
-
-    ctx.font = "900 24px 'Roboto'";
-    ctx.fillStyle = '#001c2b';
-    ctx.textAlign = "center";
-    ctx.fillText('UPDATE', badgeX + (badgeWidth / 2), mainTextY + 0);
-
-    ctx.textAlign = "left";
-    ctx.letterSpacing = "1px";
-    ctx.font = "700 13px 'Roboto'"; 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.fillText("CREATED: " + ts.toUpperCase(), textLeftX, 92);
-    ctx.letterSpacing = "0px";
-
-    // 3. Draw Logo
-    const logo = new Image();
-    const logoWidth = 430;
-    const logoHeight = 100;
-    logo.crossOrigin = "anonymous";
-    logo.src = "https://www.weather.gov/images/mlb/WFOMLBlogo-w.png";
-    await new Promise(r => { logo.onload = r; logo.onerror = r; });
-    if (logo.complete) {
-        ctx.drawImage(logo, totalW - logoWidth - 30, 10, logoWidth, logoHeight);
-    }
-
-    // 4. Capture Map and Draw (Rounded math prevents sub-pixel blurring)
-    const container = map.getContainer();
-    const mapCanvas = await html2canvas(container, { 
-        useCORS: true, 
-        logging: false,
-        scale: exportScale 
-    });
-
-    const s = mapCanvas.width / window.innerWidth;
-    ctx.drawImage(
-        mapCanvas,
-        Math.round(rect.left * s), 
-        Math.round(mapAreaTop * s), 
-        Math.round(totalW * s), 
-        Math.round(mapH * s),
-        0, bannerH, totalW, mapH
-    );
-
-    // 5. Custom Text Overlay
-    if (txtBox.style.display !== 'none') {
-        const txtCanvas = await html2canvas(txtBox, { 
-            useCORS: true, 
-            backgroundColor: null,
-            scale: exportScale 
-        });
-        const tRect = txtBox.getBoundingClientRect();
-        const relX = tRect.left - rect.left;
-        const relY = (tRect.top - mapAreaTop) + bannerH;
-        ctx.drawImage(txtCanvas, relX, relY, tRect.width, tRect.height);
         
-        textControls.style.display = 'flex';
-        textHandle.style.display = 'flex';
-    }
+        const totalW = 1350;
+        const totalH = 759;
+        const bannerH = 120;
+        const mapH = totalH - bannerH;
 
-    // 6. Output
-    try {
-        const dataUrl = final.toDataURL('image/png', 0.8);
-        const link = document.createElement('a');
-        link.download = `WeatherImpact_${Date.now()}.png`;
-        link.href = dataUrl;
-        link.click();
+        const rect = vf.getBoundingClientRect();
+        const mapAreaTop = rect.top + bannerH;
 
-        final.toBlob(blob => {
-            const item = new ClipboardItem({ "image/png": blob });
-            navigator.clipboard.write([item]);
-        });
-    } catch (e) { console.error("Export Error:", e); }
+        const exportScale = 2;
+        const finalW = totalW * exportScale;
+        const finalH = totalH * exportScale;
 
-    document.getElementById('cancelExport').onclick();
-};
+        const final = document.createElement('canvas');
+        final.width = finalW;
+        final.height = finalH;
+        const ctx = final.getContext('2d');
+
+        ctx.scale(exportScale, exportScale);
+        ctx.textBaseline = "middle";
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        // 1. Draw Banner Background
+        const grad = ctx.createLinearGradient(0, 0, totalW, 0);
+        grad.addColorStop(0, '#001c2b'); 
+        grad.addColorStop(1, '#002c69');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, totalW, bannerH);
+
+        // 2. Draw Header Text
+        const textLeftX = 30;
+        const mainTextY = 58;
+        ctx.shadowColor = "rgba(0,0,0,0.3)";
+        ctx.shadowBlur = 4; 
+        ctx.font = "600 32px 'Roboto'"; 
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = "left";
+        ctx.fillText('WEATHER IMPACT', textLeftX, mainTextY);
+
+        const impactWidth = ctx.measureText('WEATHER IMPACT').width;
+        const badgeX = textLeftX + impactWidth + 17;
+        ctx.shadowBlur = 0; 
+        ctx.fillStyle = '#a9e7ff';
+        ctx.beginPath();
+        ctx.roundRect(badgeX, mainTextY - 23, 115, 40, 6);
+        ctx.fill();
+
+        ctx.font = "900 24px 'Roboto'";
+        ctx.fillStyle = '#001c2b';
+        ctx.textAlign = "center";
+        ctx.fillText('UPDATE', badgeX + 57.5, mainTextY);
+
+        ctx.textAlign = "left";
+        ctx.font = "700 13px 'Roboto'"; 
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillText("CREATED: " + ts.toUpperCase(), textLeftX, 92);
+
+        // 3. Draw Logo
+        const logo = new Image();
+        logo.crossOrigin = "anonymous";
+        logo.src = "https://www.weather.gov/images/mlb/WFOMLBlogo-w.png";
+        await new Promise(r => { logo.onload = r; logo.onerror = r; });
+        if (logo.complete) {
+            ctx.drawImage(logo, totalW - 460, 10, 430, 100);
+        }
+
+        // 4. Capture Map
+        const container = map.getContainer();
+        const mapCanvas = await html2canvas(container, { useCORS: true, logging: false, scale: exportScale });
+        const s = mapCanvas.width / window.innerWidth;
+        ctx.drawImage(mapCanvas, Math.round(rect.left * s), Math.round(mapAreaTop * s), Math.round(totalW * s), Math.round(mapH * s), 0, bannerH, totalW, mapH);
+
+        // 5. Draw Legend on Canvas
+        const radarVal = document.getElementById('radarSelector').value;
+        const [folder, layer] = radarVal.split('|');
+        if (folder === 'cog' && typeof drawLegendToCanvas === 'function') {
+            drawLegendToCanvas(ctx, layer, totalW, totalH);
+        }
+
+        // 6. Custom Text Overlay
+        if (txtBox && txtBox.style.display !== 'none') {
+            const txtCanvas = await html2canvas(txtBox, { useCORS: true, backgroundColor: null, scale: exportScale });
+            const tRect = txtBox.getBoundingClientRect();
+            ctx.drawImage(txtCanvas, tRect.left - rect.left, (tRect.top - mapAreaTop) + bannerH, tRect.width, tRect.height);
+            textControls.style.display = 'flex';
+            textHandle.style.display = 'flex';
+        }
+
+        // 7. Output
+        try {
+            const dataUrl = final.toDataURL('image/png', 0.8);
+            const link = document.createElement('a');
+            link.download = `WeatherImpact_${Date.now()}.png`;
+            link.href = dataUrl;
+            link.click();
+            final.toBlob(blob => {
+                const item = new ClipboardItem({ "image/png": blob });
+                navigator.clipboard.write([item]);
+            });
+        } catch (e) { console.error("Export Error:", e); }
+
+        document.getElementById('cancelExport').onclick();
     };
+};
 async function loadPOIs() {
     const customCities = [
         { name: "Orlando Intl* (Orange)", lat: 28.429444, lon: -81.308889 },
@@ -2487,9 +2842,13 @@ async function loadPOIs() {
         { name: "Cocoa (Brevard)", lat: 28.369, lon: -80.743 },
         { name: "Palm Bay (Brevard)", lat: 28, lon: -80.67 },
         { name: "Satellite Beach (Brevard)", lat: 28.173, lon: -80.596 },
+        { name: "Indiatlantic (Brevard)", lat: 28.088, lon: -80.565 },
+        { name: "Patrick SFB (Brevard)", lat: 28.234, lon: -80.609 },
+        { name: "Canaveral SFS (Brevard)", lat: 28.489, lon: -80.579 },
+        { name: "Port Canaveral (Brevard)", lat: 28.411, lon: -80.607 },
         { name: "Mims (Brevard)", lat: 28.668, lon: -80.847 },
         { name: "Barefoot Bay (Brevard)", lat: 27.886, lon: -80.53 },
-        { name: "Viera - Suntree (Brevard)", lat: 28.256, lon: -80.733 },
+        { name: "Viera - Suntree (Brevard)", lat: 28.236, lon: -80.733, pop: 30000 },
         { name: "Cocoa Beach (Brevard)", lat: 28.3126, lon: -80.6136 },
         { name: "Kissimmee (Osceola)", lat: 28.292, lon: -81.412 },
         { name: "Celebration (Osceola)", lat: 28.324, lon: -81.543 },
@@ -2508,6 +2867,7 @@ async function loadPOIs() {
         { name: "Tradition (St. Lucie)", lat: 27.265, lon: -80.439 },
         { name: "White City (St. Lucie)", lat: 27.37, lon: -80.335 },
         { name: "St Lucie Fairgrounds (St. Lucie)", lat: 27.368, lon: -80.486 },
+        { name: "St Lucie Nuclear Plant (St. Lucie)", lat: 27.346, lon: -80.244 },
         { name: "Lakewood Park (St. Lucie)", lat: 27.546, lon: -80.4 },
         { name: "Okeechobee (Okeechobee)", lat: 27.2476, lon: -80.835 },
         { name: "Okee-Tantee (Okeechobee)", lat: 27.158, lon: -80.865 },
@@ -2565,7 +2925,7 @@ try {
         customCities.forEach(city => {
             // These usually don't have pop data, so they'll only stay 
             // if no NWS version with pop data exists.
-            processLocation(city.name, [city.lon, city.lat], null);
+            processLocation(city.name, [city.lon, city.lat], city.pop || null);
         });
 
         // Convert the "best" object back into a feature array
@@ -2576,78 +2936,199 @@ try {
             data: { type: 'FeatureCollection', features: flCitiesGeo }
         });
 
-        map.addLayer({
-            id: 'poi-labels',
-            type: 'symbol',
-            source: 'poi-cities',
-            layout: {
-                'text-field': ['get', 'name'],
-'text-size': [
-    'interpolate',
-    ['linear'],
-    ['get', 'priority'],
-    0, 15,          // No population? 12px font
-    50000, 20,      // 50k people? 18px font
-    200000, 28      // 200k+ people? 28px font
+      map.addLayer({
+    id: 'poi-labels',
+    type: 'symbol',
+    source: 'poi-cities',
+    layout: {
+        'text-field': ['get', 'name'],
+        'text-size': [
+    'step',
+    ['zoom'],
+    // 0 to 8.4: ONLY Large cities (>50k)
+    [
+        'case',
+        ['>', ['get', 'priority'], 50000], 
+        ['interpolate', ['linear'], ['get', 'priority'], 50000, 23, 200000, 29],
+        0
+    ],
+    // 8.5 to 9.4: Mid-size cities (>10k) join in
+    7.5, [
+        'case',
+        ['>', ['get', 'priority'], 50000], 
+        ['interpolate', ['linear'], ['get', 'priority'], 50000, 23, 200000, 29],
+        ['>', ['get', 'priority'], 10000], 
+        ['interpolate', ['linear'], ['get', 'priority'], 10000, 15, 50000, 20],
+        0
+    ],
+    // 9.5 and up: EVERYONE is visible
+    8.5, [
+        'interpolate',
+        ['linear'],
+        ['get', 'priority'],
+        0, 15,
+        10000, 15,
+        50000, 23,
+        200000, 29
+    ]
 ],
-// This ensures big cities stay on top of small ones
-'symbol-sort-key': ['-', ['get', 'priority']],
-                'text-font': ['Noto Sans Bold'],
-                'symbol-sort-key': ['-', 10000000, ['coalesce', ['get', 'priority'], 0]],
-                'text-variable-anchor': ['center'], 
-                'text-padding': 2,
-                'text-ignore-placement': false,
-                'text-allow-overlap': false
-            },
-            paint: {
-                'text-color': 'rgba(250,250,250,1)',
-                'text-halo-color': 'rgba(15,23,42,1)',
-                'text-halo-width': 1.5
-            }
-        });
+        'text-font': ['Noto Sans Bold'],
+        // Standard sort: Big cities on top
+        'symbol-sort-key': ['-', 10000000, ['coalesce', ['get', 'priority'], 0]],
+        'text-variable-anchor': ['center'], 
+        'text-padding': 2,
+        'text-allow-overlap': false
+    },
+    paint: {
+        'text-color': 'rgba(250,250,250,1)',
+        'text-halo-color': 'rgba(15,23,42,1)',
+        'text-halo-width': 2.5
+    }
+});
 
     } catch (e) {
         console.error("Error loading NWS GeoJSON:", e);
     }
 }
-document.getElementById('radarSelector').onchange = (e) => {
+// Update your existing onchange handler
+document.getElementById('radarSelector').onchange = async (e) => {
     const parts = e.target.value.split('|');
     const folder = parts[0]; 
     const layer = parts[1];  
+    const legendEl = document.getElementById('cogLegend'); // The legend container
+    console.log("Layer selected:", layer, "Config exists:", typeof COG_CONFIG !== 'undefined' ? !!COG_CONFIG[layer] : "File not loaded");
+    // --- LEGEND UI MANAGEMENT ---
+    // Hide legend by default; only show if it's a COG with a config entry
+    legendEl.style.display = 'none';
 
-    const source = map.getSource('radar');
-    if (!source) return;
+if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
+    const config = COG_CONFIG[layer];
+    
+    document.getElementById('legendTitle').innerText = config.title;
+    
+    // Inject rows with the color set directly on the style attribute
+    document.getElementById('legendItems').innerHTML = config.steps.map(s => `
+        <div class="legend-row">
+            <div class="legend-color" style="background-color: ${s.color};"></div>
+            <span>${s.label}</span>
+        </div>
+    `).join('');
+    
+    legendEl.style.display = 'block';
+}
 
-    // Handle the "DATA OFF" case
-    if (folder === 'none') {
-        map.setLayoutProperty('radar', 'visibility', 'none');
-        console.log("Radar data turned off");
-        return; // Exit early
+    // --- EXISTING CLEANUP LOGIC ---
+    if (cogRefreshInterval) {
+        clearInterval(cogRefreshInterval);
+        cogRefreshInterval = null;
     }
 
-    // Otherwise, ensure the layer is visible and update the URL
-    map.setLayoutProperty('radar', 'visibility', 'visible');
+    const style = map.getStyle();
+    if (style && style.layers) {
+        style.layers.forEach(l => {
+            if (l.id.startsWith('cog-')) {
+                map.removeLayer(l.id);
+                if (map.getSource(`${l.id}-source`)) {
+                    map.removeSource(`${l.id}-source`);
+                }
+            }
+        });
+    }
 
-    let url;
-    if (folder === 'sat') {
-        url = `https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLE=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`;
+    if (map.getLayer('radar')) map.setLayoutProperty('radar', 'visibility', 'none');
+
+    if (folder === 'none') return;
+
+    // --- COG DATA LOADING ---
+    if (folder === 'cog') {
+        const loadCOG = async () => {
+            const url = `https://jhradartools.duckdns.org/output/${layer}_southeast_cog.tif?t=${Date.now()}`;
+            const refreshId = `cog-${Date.now()}`;
+            
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                const georaster = await parseGeoraster(arrayBuffer);
+                
+                const canvas = document.createElement("canvas");
+                canvas.width = georaster.width;
+                canvas.height = georaster.height;
+                const ctx = canvas.getContext("2d");
+                const image = ctx.createImageData(georaster.width, georaster.height);
+                const values = georaster.values[0];
+
+                let p = 0;
+                for (let y = 0; y < georaster.height; y++) {
+                    for (let x = 0; x < georaster.width; x++) {
+                        const val = values[y][x];
+                        
+                        // FUTURE PROOF: Pick ramp based on layer
+                        let rgba;
+                        if (layer.includes('mesh')) {
+                            rgba = colorRampHail(val); // You'd define this later
+                        } else {
+                             rgba = colorRamponeHRMRMR(val / 25.4); // Standard Rain
+                        }
+
+                        if (!rgba) {
+                            image.data[p++] = 0; image.data[p++] = 0; image.data[p++] = 0; image.data[p++] = 0;
+                        } else {
+                            image.data[p++] = rgba[0]; image.data[p++] = rgba[1]; image.data[p++] = rgba[2]; image.data[p++] = rgba[3];
+                        }
+                    }
+                }
+                ctx.putImageData(image, 0, 0);
+
+                // ... rest of your coordinate math and map.addSource logic ...
+                const webMercatorToLngLat = (x, y) => ({
+                    lng: (x / 20037508.34) * 180,
+                    lat: (180 / Math.PI) * (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2)
+                });
+
+                const nw = webMercatorToLngLat(georaster.xmin, georaster.ymax);
+                const ne = webMercatorToLngLat(georaster.xmax, georaster.ymax);
+                const se = webMercatorToLngLat(georaster.xmax, georaster.ymin);
+                const sw = webMercatorToLngLat(georaster.xmin, georaster.ymin);
+
+                map.addSource(`${refreshId}-source`, {
+                    type: "image",
+                    url: canvas.toDataURL(),
+                    coordinates: [[nw.lng, nw.lat], [ne.lng, ne.lat], [se.lng, se.lat], [sw.lng, sw.lat]]
+                });
+
+                map.addLayer({
+                    id: refreshId,
+                    type: "raster",
+                    source: `${refreshId}-source`,
+                    paint: { 'raster-resampling': 'nearest', 'raster-opacity': 0.9 }
+                }, 'spotlight-layer');
+
+                map.once('idle', () => {
+                    map.getStyle().layers.forEach(l => {
+                        if (l.id.startsWith('cog-') && l.id !== refreshId) {
+                            map.removeLayer(l.id);
+                            if (map.getSource(`${l.id}-source`)) map.removeSource(`${l.id}-source`);
+                        }
+                    });
+                });
+
+            } catch (err) {
+                console.error("COG Refresh Failed:", err);
+            }
+        };
+
+        await loadCOG();
+        cogRefreshInterval = setInterval(loadCOG, 120000);
+
     } else {
-        url = `https://opengeo.ncep.noaa.gov/geoserver/${folder}/${layer}/ows?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`;
+        // --- STANDARD WMS LOGIC ---
+        const source = map.getSource('radar');
+        map.setLayoutProperty('radar', 'visibility', 'visible');
+        let url = folder === 'sat' 
+            ? `https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLE=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`
+            : `https://opengeo.ncep.noaa.gov/geoserver/${folder}/${layer}/ows?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`;
+        source.setTiles([url]);
     }
-
-    source.setTiles([url]);
-    
-    const sourceCache = map.style.sourceCaches['radar'];
-    if (sourceCache) {
-        if (typeof sourceCache.clear === 'function') {
-            sourceCache.clear();
-        } else {
-            sourceCache._tiles = {};
-        }
-        sourceCache.update(map.transform);
-    }
-    
-    console.log(`Switched to ${layer}`);
 };
 /* =========================================
    TEXT BOX LOGIC (V3) - FIXED
@@ -2716,6 +3197,7 @@ warningBtn.onclick = () => {
     // Toggle BOTH layers
     map.setLayoutProperty('warnings-shading', 'visibility', visibility);
     map.setLayoutProperty('warnings-border', 'visibility', visibility);
+    map.setLayoutProperty('warnings-border-case', 'visibility', visibility);
     
     if (warningsVisible) {
         warningBtn.classList.add('active');
@@ -2883,6 +3365,7 @@ document.getElementById('warningToggle').onclick = () => {
     const visibility = warningsVisible ? 'visible' : 'none';
     map.setLayoutProperty('warnings-shading', 'visibility', visibility);
     map.setLayoutProperty('warnings-border', 'visibility', visibility);
+    map.setLayoutProperty('warnings-border-case', 'visibility', visibility);
     const btn = document.getElementById('warningToggle');
     if (warningsVisible) {
         btn.classList.add('active');
@@ -2900,36 +3383,27 @@ setInterval(updateWarnings, 120000);
 function applyWarningIsolation() {
     if (!map.getLayer('warnings-shading')) return;
 
-    // 1. Priority: If a specific warning is clicked
     if (isolatedWarningId !== null) {
+        // Selected Warning
         map.setPaintProperty('warnings-shading', 'fill-opacity', [
-            'case',
-            ['==', ['id'], isolatedWarningId], 0.6,
-            0.2
+            'case', ['==', ['id'], isolatedWarningId], 0.6, 0.1
         ]);
         map.setPaintProperty('warnings-border', 'line-opacity', [
-            'case',
-            ['==', ['id'], isolatedWarningId], 1,
-            0.3
+            'case', ['==', ['id'], isolatedWarningId], 1, 0.2
         ]);
-    } 
-    else {
-        // 2. Check for active drawing or existing tracks
-        const stormSource = map.getSource('storm');
-        const hasActiveFeatures = stormSource && stormSource._data && stormSource._data.features.length > 0;
         
-        // Conditions that trigger dimming
-        const isDrawingOrTracking = dragging || edgeLocked || mode === 'cone' || mode === 'manual' || hasActiveFeatures;
-
-        if (isDrawingOrTracking) {
-            // DIMMED STATE
-            map.setPaintProperty('warnings-shading', 'fill-opacity', 0.2);
-            map.setPaintProperty('warnings-border', 'line-opacity', 0.3);
-        } else {
-            // BRIGHT STATE (Normal)
-            map.setPaintProperty('warnings-shading', 'fill-opacity', 0.6);
-            map.setPaintProperty('warnings-border', 'line-opacity', 1);
-        }
+        // TURN ON BLACK CASE ONLY FOR SELECTED
+        map.setPaintProperty('warnings-border-case', 'line-opacity', [
+            'case', ['==', ['id'], isolatedWarningId], 1, 0
+        ]);
+    } else {
+        // Normal State
+        const stormSource = map.getSource('storm');
+        const isActive = stormSource && stormSource._data.features.length > 0;
+        
+        map.setPaintProperty('warnings-shading', 'fill-opacity', isActive ? 0.2 : 0.6);
+        map.setPaintProperty('warnings-border', 'line-opacity', isActive ? 0.3 : 1);
+        map.setPaintProperty('warnings-border-case', 'line-opacity', 0);
     }
 }
 function getHailDescription(sizeStr) {
@@ -2949,26 +3423,220 @@ function getHailDescription(sizeStr) {
     if (size >= 0.88) return "(Nickel)";
     if (size >= 0.75) return "(Penny)";
     if (size >= 0.50) return "";
+    if (size >= 0.25) return "(Pea)";
     return "";
 }
 
 function updateCardVisibility() {
     const card = document.getElementById('draggableCard');
-    const stormSource = map.getSource('storm');
     
-    // Check if there are features currently drawn in the storm source
+    // IF we are in export mode, FORCE hide and exit
+    if (isExportMode) {
+        card.style.setProperty('display', 'none', 'important');
+        return;
+    }
+
+    const stormSource = map.getSource('storm');
     const hasActiveTrack = stormSource && 
                            stormSource._data && 
                            stormSource._data.features && 
                            stormSource._data.features.length > 0;
 
-    // Show if in a tracking mode OR if a track already exists
     if (mode === 'cone' || mode === 'manual' || hasActiveTrack) {
         card.style.display = 'block';
     } else {
         card.style.display = 'none';
     }
 }
+function colorRamponeHRMRMR(inches) {
+    if (inches < 0.01) return null; // No precipitation
+
+    // Cyan/Blue range (0.01 - 0.20)
+    if (inches < 0.05) return [102, 235, 232, 255];
+    if (inches < 0.10) return [84, 203, 232, 255];
+    if (inches < 0.15) return [74, 164, 236, 255];
+    if (inches < 0.20) return [30, 80, 238, 255];
+
+    // Green range (0.20 - 1.25)
+    if (inches < 0.40) return [110, 243, 67, 255];
+    if (inches < 0.60) return [76, 212, 53, 255];
+    if (inches < 0.80) return [56, 178, 41, 255];
+    if (inches < 1.00) return [45, 143, 31, 255];
+
+    // Yellow/Gold/Brown range (1.00 - 2.50)
+    if (inches < 1.25) return [251, 250, 49, 255];
+    if (inches < 1.50) return [244, 211, 48, 255];
+    if (inches < 1.75) return [229, 180, 46, 255];
+    if (inches < 2.00) return [198, 134, 38, 255];
+    if (inches < 2.50) return [233, 155, 148, 255];
+
+    // Red range (2.50 - 4.50)
+    if (inches < 3.00) return [229, 81, 71, 255];
+    if (inches < 3.50) return [209, 36, 31, 255];
+    if (inches < 4.00) return [167, 30, 24, 255];
+
+    // Purple/Magenta range (4.00 - 6.50)
+    if (inches < 4.50) return [233, 50, 232, 255];
+    if (inches < 5.00) return [175, 40, 185, 255];
+    if (inches < 5.50) return [143, 33, 151, 255];
+    if (inches < 6.00) return [104, 24, 110, 255];
+
+    // White/Light Blue/Cream (6.00+)
+    if (inches < 6.50) return [255, 255, 255, 255];
+    if (inches < 7.00) return [193, 201, 247, 255];
+    if (inches < 8.00) return [223, 253, 253, 255];
+    
+    return [255, 255, 194, 255]; // 8.0+ (Cream)
+}
+function colorRampHail(mm) {
+    const inches = mm / 25.4; 
+    if (inches < 0.25) return null; // Noise floor
+
+    // BLUE TO GREEN (Sub-Severe)
+    if (inches < 0.50) return [1, 160, 246, 255];   // 0.25" - Blue (#01a0f6)
+    if (inches < 1.00) return [0, 236, 236, 255];   // 0.50" - Light Cyan (#00ecec)
+    
+    // YELLOW AT 1.00" (Severe Milestone: Quarter)
+    if (inches < 1.50) return [255, 255, 0, 255];   // 1.00" - Yellow (#ffff00)
+    if (inches < 1.75) return [255, 144, 0, 255];   // 1.50" - Orange (#ff9000)
+
+    // RED AT 1.75" (Severe Milestone: Golf Ball)
+    if (inches < 2.00) return [255, 0, 0, 255];     // 1.75" - Red (#ff0000)
+    
+    // MAROON AT 2.00" (Hen Egg)
+    if (inches < 2.50) return [128, 0, 0, 255];     // 2.00" - Maroon (#800000)
+
+    // PURPLE / MAGENTA BY 2.50" (Tennis Ball)
+    if (inches < 3.00) return [255, 0, 255, 255];   // 2.50" - Magenta (#ff00ff)
+    if (inches < 4.00) return [153, 85, 201, 255];  // 3.00" - Purple (#9955c9)
+
+    // WHITE BY 4.00" (Softball+)
+    return [255, 255, 255, 255];                    // 4.00"+ - White (#ffffff)
+}
+
+// 1. Define a function to draw the bolt on a tiny hidden canvas
+function createBoltIcon() {
+    const size = 64; // resolution of the icon
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Draw the lightning shape
+    ctx.beginPath();
+    ctx.moveTo(35, 5);  // Top point
+    ctx.lineTo(15, 35); // Middle left
+    ctx.lineTo(30, 35); // Middle notch
+    ctx.lineTo(25, 60); // Bottom point
+    ctx.lineTo(45, 25); // Middle right
+    ctx.lineTo(30, 25); // Middle notch
+    ctx.closePath();
+
+    // Fill with white and give it a black outline
+    ctx.fillStyle = 'white';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    return ctx.getImageData(0, 0, size, size);
+}
+
+window.addEventListener('keydown', (e) => {
+    // 1. Safety check: Don't fire if typing in text boxes
+if (document.activeElement.tagName === 'INPUT' || 
+        document.activeElement.getAttribute('contenteditable') === 'true' ||
+        document.activeElement.closest('[contenteditable="true"]')) { // Added this check
+        return;
+    }
+
+    const key = e.key.toLowerCase();
+
+    // 2. Handle Escape Key (Exits Export or resets to Pan)
+    if (e.key === 'Escape') {
+        const exportUI = document.getElementById('exportUI');
+        if (exportUI && exportUI.style.display === 'flex') {
+            document.getElementById('cancelExport').click();
+        } else {
+            setMode('pan');
+        }
+        return;
+    }
+
+    if (e.key === 'Enter') {
+    const exportUI = document.getElementById('exportUI');
+    // Only trigger if we are currently looking at the export preview
+    if (exportUI && exportUI.style.display === 'flex') {
+        e.preventDefault(); // Prevent accidental line breaks in text boxes
+        document.getElementById('confirmExport').click();
+    }
+    return;
+}
+
+    // 3. Mode & Action Hotkeys
+    switch (key) {
+        case 'p': setMode('pan'); break;
+        case 'd': setMode('draw'); break;
+        case 'l': setMode('manual'); break;
+        case 's': setMode('spotlight'); break;
+        case 't': document.getElementById('addTextBtn').click(); break; // Open Text Box
+        case 'w': document.getElementById('warningToggle').click(); break; // Toggle Warnings
+        case 'r': document.getElementById('idModeBtn').click(); break; // Toggle Warnings
+        case 'e': document.getElementById('exportBtn').click(); break;
+        
+        case 'c': 
+            if (e.shiftKey) {
+                setMode('erase'); // Shift + C: Clear all drawings
+            } else {
+                setMode('clearTrack'); // C: Clear active storm track
+            }
+            break;
+    }
+});
+setTimeout(() => {
+    document.querySelector('.toolbar').classList.add('dim');
+}, 7000);
+// --- LIGHTNING TOGGLE LOGIC ---
+// --- LIGHTNING TOGGLE & SMART REFRESH ---
+const lightningBtn = document.getElementById('lightningToggle');
+let lightningVisible = true; 
+
+lightningBtn.classList.add('active');
+
+lightningBtn.onclick = () => {
+    lightningVisible = !lightningVisible;
+    const visibility = lightningVisible ? 'visible' : 'none';
+    
+    if (map.getLayer('lightning-glow')) {
+        map.setLayoutProperty('lightning-glow', 'visibility', visibility);
+    }
+    if (map.getLayer('lightning-icon')) {
+        map.setLayoutProperty('lightning-icon', 'visibility', visibility);
+    }
+    
+    if (lightningVisible) {
+        lightningBtn.classList.add('active');
+        // Trigger an immediate update when turned back on so data isn't stale
+        updateLightningData(); 
+    } else {
+        lightningBtn.classList.remove('active');
+    }
+};
+
+// Isolated function for updating data
+function updateLightningData() {
+    // Check visibility BEFORE requesting
+    if (!lightningVisible) return; 
+
+    const source = map.getSource('lightning-data');
+    if (source) {
+        console.log("Fetching fresh lightning data...");
+        source.setData(`https://jhradartools.duckdns.org/output/lightning.json?t=${Date.now()}`);
+    }
+}
+
+// Set the interval to call our "Smart" function
+setInterval(updateLightningData, 60000);
 </script>
 </body>
 </html>

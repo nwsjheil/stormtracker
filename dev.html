@@ -94,6 +94,7 @@ body{
     font-weight:800;
     cursor:pointer;
     white-space:nowrap;
+    text-align:center;
 }
 
 .tool.active{
@@ -500,6 +501,13 @@ body{
 [contenteditable="true"] {
     cursor: text !important;
 }
+
+/* Add this near your other .tool styles around line 120 */
+#idModeBtn.active {
+    background: #3c7bba !important;
+    color: white !important;
+    border-color: #6ae6ff;
+}
 </style>
 </head>
 
@@ -524,7 +532,8 @@ body{
         </div>
 <div class="tool-group">
     <div class="tool" id="drawBtn">DRAW</div>
-    <div class="tool" id="spotBtn">SPOT</div>
+    <div class="tool" id="spotBtn">SPOT</div>       
+    <div class="tool" id="idModeBtn">ID<br>ROADS</div>
     <div class="tool erase-btn" id="eraseBtn">ERASE</div>
 </div>
 
@@ -590,20 +599,19 @@ body{
             <button class="dur-btn active" data-mins="60">1h</button>
             <button class="dur-btn" data-mins="120">2h</button>
         </div>
-        <div class="tool-group">
-            <div class="tool" id="warningToggle">WARNINGS</div>
-        </div>
         <!-- FAN WIDTH -->
         <div class="tool-group" id="widthContainer">
             <span style="font-size:10px; color:#94a3b8;">FAN</span>
             <input type="range" id="widthSlider" min="20" max="50" value="30">
             <span id="widthVal" style="font-size:15px; color:#94a3b8;">30</span>
         </div>
-
         <div class="tool-group">
             <div class="tool danger-btn" id="clearBtn">CLEAR<br>TRACK</div>
         </div>
 
+        <div class="tool-group">
+            <div class="tool" id="warningToggle">WARNINGS</div>
+        </div>
     </div>
 
 </div>
@@ -770,7 +778,8 @@ let dragging = false;
 let edgeLocked = false;
 
 let startPoint = null;
-
+let isIdMode = false;
+let activeLabels = []; // Your array of "stuck" road names
 let stormLine = [];
 let lastETALine = null;
 let etaLabels = [];
@@ -1118,39 +1127,7 @@ map.addLayer({
     }
 }, 'radar');
 
-    // 3. Add Border Layer (ABOVE everything)
-map.addLayer({
-    id: 'warnings-border-case', // Better name
-    type: 'line',
-    source: 'nws-warnings',
-    layout: { 'visibility': 'none' },
-    paint: {
-        'line-color': '#000000',
-        'line-width': 12, // Wider than the colored line (7) to create the edge
-        'line-opacity': 0  // Hidden until isolation turns it on
-    }
-}); // Force it to stay under the colored border
-    // Replace your warnings-border layer definition with this simple version
-map.addLayer({
-    id: 'warnings-border',
-    type: 'line',
-    source: 'nws-warnings',
-    layout: { 'visibility': 'none' },
-    paint: {
-        'line-color': [
-            'case',
-            ['in', 'Tornado', ['get', 'event']], '#FF0000',
-            ['in', 'Severe Thunderstorm', ['get', 'event']], '#FFFF00',
-            ['in', 'Flash Flood', ['get', 'event']], '#00FF00',
-            ['in', 'Flood Advisory', ['get', 'event']], '#4ade80',
-            ['in', 'Marine', ['get', 'event']], '#FFA500',
-            ['in', 'Statement', ['get', 'event']], '#D2B48C',
-            '#FFFFFF'
-        ],
-        'line-width': 7,
-        'line-opacity': 1 // Default to 1, isolation will dim it
-    }
-});
+ 
 
     map.on('zoomend', () => {
         if (lastETALine) {
@@ -1464,6 +1441,40 @@ map.addLayer({
     }
 });
 
+   // 3. Add Border Layer (ABOVE everything)
+map.addLayer({
+    id: 'warnings-border-case', // Better name
+    type: 'line',
+    source: 'nws-warnings',
+    layout: { 'visibility': 'none' },
+    paint: {
+        'line-color': '#000000',
+        'line-width': 12, // Wider than the colored line (7) to create the edge
+        'line-opacity': 0  // Hidden until isolation turns it on
+    }
+}); // Force it to stay under the colored border
+    // Replace your warnings-border layer definition with this simple version
+map.addLayer({
+    id: 'warnings-border',
+    type: 'line',
+    source: 'nws-warnings',
+    layout: { 'visibility': 'none' },
+    paint: {
+        'line-color': [
+            'case',
+            ['in', 'Tornado', ['get', 'event']], '#FF0000',
+            ['in', 'Severe Thunderstorm', ['get', 'event']], '#FFFF00',
+            ['in', 'Flash Flood', ['get', 'event']], '#00FF00',
+            ['in', 'Flood Advisory', ['get', 'event']], '#4ade80',
+            ['in', 'Marine', ['get', 'event']], '#FFA500',
+            ['in', 'Statement', ['get', 'event']], '#D2B48C',
+            '#FFFFFF'
+        ],
+        'line-width': 7,
+        'line-opacity': 1 // Default to 1, isolation will dim it
+    }
+});
+
 
 map.addLayer({
     id: 'road-shields',
@@ -1616,6 +1627,116 @@ map.addLayer({
         'line-opacity': 1
     }
 });
+// 1. The "Brain" - GeoJSON source to store your stamped labels
+map.addSource('persistent-labels', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+});
+
+// 2. The "Hidden Radar" - Invisible layer used only for road name queries
+map.addLayer({
+    id: 'road-shields-hide',
+    type: 'symbol',
+    source: 'esri-base',
+    'source-layer': 'Road/label',
+    layout: {
+        'text-field': ['get', '_name'],
+        'text-font': ['Noto Sans Bold'],
+        
+        // --- MAXIMUM DENSITY OVERDRIVE ---
+        'symbol-placement': 'line',      // Repeats names along the line geometry
+        'symbol-spacing': 20,            // Staps a name every 20px (Very Dense)
+        'text-allow-overlap': true,      // Loads names even if they crowd each other
+        'text-ignore-placement': true,   // Prevents other layers from hiding these names
+        'text-max-angle': 360,           // Keeps names attached even on sharp curves
+        'text-rotation-alignment': 'map' // Aligns invisible text with the road direction
+    },
+    paint: {
+        'text-opacity': 0 // Keep it 100% invisible to the user
+    }
+});
+
+// 3. The "Ink" - The actual white labels that appear when you click
+map.addLayer({
+    id: 'road-id-labels',
+    type: 'symbol',
+    source: 'persistent-labels',
+    layout: {
+        'text-field': ['get', 'roadName'],
+        'text-font': ['Noto Sans Bold'], // Verified font to avoid 404s
+        'text-size': 14,
+        'text-justify': 'center',
+        'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+        'text-radial-offset': 0
+    },
+    paint: {
+        'text-color': '#fffca3',
+        'text-halo-color': '#1a1a1a', 
+        'text-halo-width': 3
+    }
+});
+
+// --- UNIVERSAL ROAD ID & HOVER LOGIC ---
+
+// Universal helper to find our query layer
+function getRoadLayers() {
+    return map.getStyle().layers
+        .map(l => l.id)
+        .filter(id => id === 'road-shields-hide');
+}
+
+// 1. The Universal Click (Stamp Road Name)
+map.on('click', (e) => {
+    if (!isIdMode) return;
+
+    // Create a 30px search area around the click
+    const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+
+    const features = map.queryRenderedFeatures(box, {
+        layers: ['road-shields-hide']
+    });
+
+    if (features.length > 0) {
+        // Stop the click from opening warning popups
+        e.originalEvent.stopPropagation();
+        
+  const p = features[0].properties;
+        let roadName = p._name || p._name_global || p.name || p._ref || "Road";
+
+        // --- NEW: CLEANUP LOGIC FOR SPECIFIC FL ROADS ---
+        // We use a regex with 'i' (case-insensitive) and handle optional dashes
+        if (/^FL[- ]?5$/i.test(roadName)) {
+            roadName = "US-1";
+        } else if (/^FL[- ]?91$/i.test(roadName)) {
+            roadName = "FL TPKE";
+        } else if (/^FL[- ]?25$/i.test(roadName)) {
+            roadName = "US-27";
+        } else if (/^FL[- ]?9$/i.test(roadName)) {
+            roadName = "I-95";
+        }
+        activeLabels.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+            properties: { roadName: roadName }
+        });
+
+        map.getSource('persistent-labels').setData({
+            type: 'FeatureCollection',
+            features: activeLabels
+        });
+    } 
+});
+
+// 2. The Universal Hover (Cursor Feedback)
+map.on('mousemove', (e) => {
+    if (!isIdMode) return;
+
+    const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+    const features = map.queryRenderedFeatures(box, { layers: ['road-shields-hide'] });
+
+    // Switch to 'help' question mark when near a road, otherwise 'crosshair'
+    map.getCanvas().style.cursor = features.length ? 'help' : 'crosshair';
+});
 
     // Default: Disable dragPan because starting in Cone Mode
     //map.dragPan.disable();
@@ -1743,17 +1864,27 @@ function setMode(nextMode) {
             document.getElementById('help').innerHTML = "TRACKS CLEARED";
             break;
 
-        case 'erase':
-            drawings = [];
-            redrawDrawings();
-            document.getElementById('help').innerHTML = "ALL DRAWINGS CLEARED";
-            applyWarningIsolation();
-            // Snap back to Pan mode after a brief delay
-            setTimeout(() => {
-                setMode('pan');
-            }, 1000);
-            break;
-    }
+            case 'erase':
+                // 1. Clear hand drawings and spotlights
+                drawings = [];
+                redrawDrawings();
+
+                // 2. Clear Road ID labels (The new part)
+                activeLabels = []; 
+                map.getSource('persistent-labels').setData({
+                    type: 'FeatureCollection',
+                    features: []
+                });
+
+                document.getElementById('help').innerHTML = "ALL DRAWINGS & LABELS CLEARED";
+                applyWarningIsolation();
+
+                // Snap back to Pan mode after a brief delay
+                setTimeout(() => {
+                    setMode('pan');
+                }, 1000);
+                break;
+            }
     updateCardVisibility();
 }
 
@@ -1773,6 +1904,29 @@ function clearStorm() {
     applyWarningIsolation();
     updateCardVisibility();
 }
+
+document.getElementById('idModeBtn').onclick = () => {
+    isIdMode = !isIdMode;
+    const btn = document.getElementById('idModeBtn');
+    
+    if (isIdMode) {
+        btn.innerHTML = "ID<br>ROADS";
+        btn.style.backgroundColor = "#3c7bba"; // Red visual cue
+        map.getCanvas().style.cursor = 'help';
+    } else {
+        // --- THE CLEAN SLATE LOGIC ---
+        btn.innerHTML = "ID<br>ROADS";
+        btn.style.backgroundColor = ""; 
+        map.getCanvas().style.cursor = '';
+
+        //activeLabels = []; // Wipe the array
+        //map.getSource('persistent-labels').setData({
+        //    type: 'FeatureCollection',
+        //    features: []
+        //}); // Wipe the map
+    }
+};
+
 /* =========================================
    MOUSEDOWN
 ========================================= */
@@ -1882,14 +2036,13 @@ if(mode === 'draw' && dragging){
             let coords = [...currentDrawing, currentDrawing[0]];
             let line = turf.lineString(coords);
 
-            // 2. Remove "mouse jitter" (Tolerance: higher = smoother/simpler)
-            let simplified = turf.simplify(line, { tolerance: 0.01, highQuality: true });
+            // 1. Simplify the raw "jagged" path first
+            let simplified = turf.simplify(line, { tolerance: 0.005, highQuality: true });
 
-            // 3. Apply the curve with high resolution
-            // Sharpness 0.85 provides a very organic, rounded feel
+            // 2. THEN apply the Bezier curve to the simplified path
             let smoothed = turf.bezierSpline(simplified, { 
                 sharpness: 0.85,
-                resolution: 12000 // Adds more points for a silkier look
+                resolution: 10000 
             });
             
             const world = [[-180, 85], [180, 85], [180, -85], [-180, -85], [-180, 85]];
@@ -1965,10 +2118,20 @@ if (mode === 'manual') {
     }
 
     if ((mode === 'draw' || mode === 'spotlight') && dragging) {
-    currentDrawing.push([e.lngLat.lng, e.lngLat.lat]);
-    redrawDrawings();
-    return;
-}
+        const lastPoint = currentDrawing[currentDrawing.length - 1];
+        const newPoint = [e.lngLat.lng, e.lngLat.lat];
+
+        if (lastPoint) {
+            // Only add the point if the mouse moved more than ~5 pixels
+            // This acts as a "stabilizer" for your hand
+            const dist = turf.distance(lastPoint, newPoint, { units: 'miles' });
+            if (dist < 0.05) return; // Adjust this number to change 'smoothness'
+        }
+
+        currentDrawing.push(newPoint);
+        redrawDrawings();
+        return;
+    }
 });
 
 

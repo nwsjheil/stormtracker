@@ -2994,7 +2994,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
     // --- COG DATA LOADING ---
     if (folder === 'cog') {
         const loadCOG = async () => {
-            const url = `http://159.65.236.118/output/${layer}_southeast_cog.tif?t=${Date.now()}`;
+            const url = `https://jhradartools.duckdns.org/output/${layer}_southeast_cog.tif?t=${Date.now()}`;
             const refreshId = `cog-${Date.now()}`;
             
             try {

@@ -17,20 +17,20 @@ const COG_CONFIG = {
             { label: '8" +', color: '#ffffc2' }
         ]
     },
-'mrms_mesh': {
-    title: "MAX HAIL SIZE (IN)",
-    steps: [
-        { label: '0.25" (Pea)',       color: '#01a0f6' },
-        { label: '0.50"',             color: '#00ecec' },
-        { label: '1.00" (Quarter)',    color: '#ffff00' },
-        { label: '1.50"',             color: '#ff9000' },
-        { label: '1.75" (Golf Ball)',  color: '#ff0000' },
-        { label: '2.00"',             color: '#800000' }, // Maroon
-        { label: '2.50" (Tennis Ball)', color: '#ff00ff' },
-        { label: '3.00"',             color: '#9955c9' },
-        { label: '4.00"+ (Softball)',  color: '#ffffff' } 
-    ]
-}
+    'mrms_mesh': {
+        title: "MAX HAIL SIZE (IN)",
+        steps: [
+            { label: '0.25" (Pea)',       color: '#01a0f6' },
+            { label: '0.50"',             color: '#00ecec' },
+            { label: '1.00" (Quarter)',    color: '#ffff00' },
+            { label: '1.50"',             color: '#ff9000' },
+            { label: '1.75" (Golf Ball)',  color: '#ff0000' },
+            { label: '2.00"',             color: '#800000' }, // Maroon
+            { label: '2.50" (Tennis Ball)', color: '#ff00ff' },
+            { label: '3.00"',             color: '#9955c9' },
+            { label: '4.00"+ (Softball)',  color: '#ffffff' } 
+        ]
+    }
 };
 
 /**

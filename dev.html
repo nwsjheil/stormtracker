@@ -3,6 +3,7 @@
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="robots" content="noindex, nofollow">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <title>Weather Alert Tool | NWS Melbourne</title>
 
@@ -1135,11 +1136,11 @@ const popupHtml = `
             closeButton: false, 
             maxWidth: 'none', 
             className: 'custom-warning-popup',
-        // 1. Change anchor to bottom-right so the box grows UP and LEFT from the point
-            anchor: 'bottom-right', 
-            // 2. Add an offset to give it some 'breathing room' from the cursor
-            // [x, y] - negative x moves left, negative y moves up
-            offset: [-10, -10]
+            // Change anchor to top-left so the box grows DOWN and RIGHT from the point
+            anchor: 'top-left', 
+            // Positive values move the popup away from the top-left corner of the cursor
+            // [x, y] - positive x moves right, positive y moves down
+            offset: [-500, -250] 
         })
             .setLngLat(e.lngLat)
             .setHTML(popupHtml)
@@ -1777,7 +1778,7 @@ map.addLayer({
     // Add this to your map.on('load')
 map.addSource('lightning-data', {
     type: 'geojson',
-    data: 'https://jhradartools.duckdns.org/output/lightning.json'
+    data: 'https://jhwxtools.com/mrms/output/lightning.json'
 });
 
 // The Glow
@@ -3112,11 +3113,11 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
 
     // Check both files sequentially to find the correct layer data
     (async () => {
-        let isoTime = await getTimestamp('https://jhradartools.duckdns.org/output/2min.txt');
+        let isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/2min.txt');
         
         // If not found in 2min (radar), check hourly (rainfall)
         if (!isoTime) {
-            isoTime = await getTimestamp('https://jhradartools.duckdns.org/output/hourly.txt');
+            isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/hourly.txt');
         }
 
         if (isoTime) {
@@ -3177,7 +3178,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
     // --- COG DATA LOADING ---
     if (folder === 'cog') {
         const loadCOG = async () => {
-            const url = `https://jhradartools.duckdns.org/output/mrms_${layer}_southeast_cog.tif?t=${Date.now()}`;
+            const url = `https://jhwxtools.com/mrms/output/mrms_${layer}_southeast_cog.tif?t=${Date.now()}`;
             const refreshId = `cog-${Date.now()}`;
             
             try {
@@ -3690,7 +3691,7 @@ function updateLightningData() {
     const source = map.getSource('lightning-data');
     if (source) {
         console.log("Fetching fresh lightning data...");
-        source.setData(`https://jhradartools.duckdns.org/output/lightning.json?t=${Date.now()}`);
+        source.setData(`https://jhwxtools.com/mrms/output/lightning.json?t=${Date.now()}`);
     }
 }
 

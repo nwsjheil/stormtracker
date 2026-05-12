@@ -739,32 +739,30 @@ widthSlider.oninput = (e) => {
     }
 };
 const map = new maplibregl.Map({
-
     container: 'map',
     preserveDrawingBuffer: true,
-    // The base Esri Style
     style: 'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/resources/styles/root.json',
     center: [-81.4, 28.5],
     zoom: 7,
-    
-    // This function fixes the 404 errors by forcing absolute URLs
+    // THE FIX: Intercept and rewrite relative Esri URLs
     transformRequest: (url, resourceType) => {
         const esriBase = 'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/';
         
-        // 1. Fix Sprite URLs (icons/shields)
-        if (resourceType === 'SpriteJSON' || resourceType === 'SpriteImage') {
-            if (url.includes('../')) {
-                return { url: url.replace(/.*\.\.\//, esriBase + 'resources/') };
+        // Check if the URL is trying to use a relative path
+        if (url.startsWith('../') || url.startsWith('./')) {
+            // Fix Sprites
+            if (resourceType === 'SpriteJSON' || resourceType === 'SpriteImage') {
+                return { url: url.replace(/^.*?\.\.\//, esriBase + 'resources/') };
+            }
+            // Fix Tiles and Sources
+            if (resourceType === 'Source' || resourceType === 'Tile') {
+                return { url: url.replace(/^.*?\.\.\//, esriBase) };
             }
         }
         
-        // 2. Fix Tile URLs (the actual map data)
-        if (resourceType === 'Source' || resourceType === 'Tile') {
-            if (url.startsWith('tile/') || url.includes('../')) {
-                // Remove the relative path and append to Esri base
-                const cleanUrl = url.replace(/.*\.\.\//, '');
-                return { url: esriBase + (cleanUrl.startsWith('tile/') ? cleanUrl : 'tile/' + cleanUrl) };
-            }
+        // Fix for the specific 404: Esri tile requests often need the trailing slash removed or redirected
+        if (url === esriBase + 'tile/') {
+            return { url: esriBase };
         }
 
         return { url: url };

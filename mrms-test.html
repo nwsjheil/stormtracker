@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+
+<title>MRMS Mosaic Test</title>
+
+<link
+href="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.css"
+rel="stylesheet"/>
+
+<script src="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.js"></script>
+
+<style>
+html, body {
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+}
+
+#map {
+    width:100%;
+    height:100%;
+    background:#111;
+}
+</style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<script>
+
+const WIDTH = 920;
+const HEIGHT = 630;
+
+// =========================
+// BLANK MAP
+// =========================
+
+const map = new maplibregl.Map({
+    container: 'map',
+    style: {
+        version: 8,
+        sources: {},
+        layers: [
+            {
+                id: 'background',
+                type: 'background',
+                paint: {
+                    'background-color': '#0b0b0b'
+                }
+            }
+        ]
+    },
+    center: [-95, 35],
+    zoom: 5
+});
+
+// =========================
+// WEB MERCATOR HELPERS
+// =========================
+
+function lngLatToWorld(lng, lat) {
+
+    const sin = Math.sin(lat * Math.PI / 180);
+
+    return {
+        x: (lng + 180) / 360,
+        y: 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
+    };
+}
+
+function worldToLngLat(x, y) {
+
+    return {
+        lng: x * 360 - 180,
+        lat:
+            (180 / Math.PI) *
+            Math.atan(Math.sinh(Math.PI * (1 - 2 * y)))
+    };
+}
+
+function getImageBounds(clon, clat, zoom) {
+
+    const scale = 256 * Math.pow(2, zoom);
+
+    const center = lngLatToWorld(clon, clat);
+
+    const dx = WIDTH / 2 / scale;
+    const dy = HEIGHT / 2 / scale;
+
+    const west = center.x - dx;
+    const east = center.x + dx;
+    const north = center.y - dy;
+    const south = center.y + dy;
+
+    return {
+        nw: worldToLngLat(west, north),
+        ne: worldToLngLat(east, north),
+        se: worldToLngLat(east, south),
+        sw: worldToLngLat(west, south)
+    };
+}
+
+// =========================
+// CREATE SINGLE MRMS PANEL
+// =========================
+
+function addMRMSPanel(id, clon, clat, zoom) {
+
+    const now = new Date();
+
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1;
+    const day = now.getUTCDate();
+    const hour = now.getUTCHours();
+    const minute = Math.floor(now.getUTCMinutes() / 2) * 2;
+
+    const url =
+`https://mrms.nssl.noaa.gov/qvs/product_viewer/local/render_multi_domain_product_layer.php?mode=run&cpp_exec_dir=/home/metop/web/specific/opv/&web_resources_dir=/var/www/html/qvs/product_viewer/resources/&prod_root=CREF&qperate_pal_option=0&qpe_pal_option=0&year=${year}&month=${month}&day=${day}&hour=${hour}&minute=${minute}&clon=${clon}&clat=${clat}&zoom=${zoom}&width=920&height=630`;
+
+    const bounds = getImageBounds(clon, clat, zoom);
+
+    map.addSource(id, {
+        type: 'image',
+        url,
+        coordinates: [
+            [bounds.nw.lng, bounds.nw.lat],
+            [bounds.ne.lng, bounds.ne.lat],
+            [bounds.se.lng, bounds.se.lat],
+            [bounds.sw.lng, bounds.sw.lat]
+        ]
+    });
+
+    map.addLayer({
+        id,
+        type: 'raster',
+        source: id,
+        paint: {
+            'raster-opacity': 1
+        }
+    });
+}
+
+// =========================
+// LOAD MOSAIC
+// =========================
+
+map.on('load', () => {
+
+    // central CONUS
+    addMRMSPanel(
+        'mrms1',
+        -95,
+        37,
+        5
+    );
+
+    // southeast
+    addMRMSPanel(
+        'mrms2',
+        -82,
+        30,
+        5
+    );
+
+    // plains
+    addMRMSPanel(
+        'mrms3',
+        -102,
+        38,
+        5
+    );
+
+    // northeast
+    addMRMSPanel(
+        'mrms4',
+        -75,
+        42,
+        5
+    );
+
+});
+
+</script>
+</body>
+</html>

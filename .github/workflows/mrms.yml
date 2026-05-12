@@ -1,0 +1,41 @@
+name: MRMS 1H QPE
+
+on:
+  workflow_dispatch: # Manual button only
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin python3-gdal
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # Cache is removed here to avoid the requirements.txt error
+
+      - name: Install Python deps
+        run: |
+          pip install requests
+
+      - name: Run MRMS
+        run: |
+          python scripts/mrms.py
+
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add output/mrms_1h_qpe_cog.tif
+          # This keeps your repo size small by overwriting the last update
+          git commit --amend -m "Latest MRMS Update" || git commit -m "Latest MRMS Update"
+          git push --force

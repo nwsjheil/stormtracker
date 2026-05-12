@@ -594,8 +594,10 @@ body{
     <div class="toolbar-row secondary">
 
         <!-- RADAR -->
-        <div class="tool dropdown" id="radarWrapper">
-            <span style="font-size:10px; color:#94a3b8;">DATA</span>
+
+<div class="tool-group" style="position: relative;">
+    <div class="tool dropdown" id="radarWrapper" style="border-right: 1px solid rgba(255,255,255,0.1); padding-right: 8px;">
+        <span style="font-size:10px; color:#94a3b8;">DATA</span>
             <select id="radarSelector">
                 <option value="none|none">BLANK</option>
                 <optgroup label="NATIONAL">
@@ -630,8 +632,20 @@ body{
     <option value="sat|goes_water_vapor_imagery">WV</option></optgroup>
 
             </select>
-        </div>
-
+    </div>
+    
+    <div id="opacityToggle" title="Layer Settings" style="cursor:pointer; padding: 0 8px; display:flex; align-items:center; color:#a9e7ff; font-size:14px;">
+        ◐
+    </div>
+    <div id="sampleToggle" title="Sample Data Value" style="cursor:pointer; padding: 0 8px; display:none; align-items:center; color:#a9e7ff; font-size:14px;">
+        💧
+    </div>
+    <div id="opacityMenu" style="display:none; position:absolute; top:45px; left:0; background:rgba(15,23,42,0.95); border:1px solid var(--accent); padding:12px; border-radius:12px; z-index:1000; box-shadow:0 8px 20px rgba(0,0,0,0.5); flex-direction:column; gap:8px; min-width:140px;">
+        <div style="font-size:9px; color:#94a3b8; font-weight:800; text-transform:uppercase;">Opacity</div>
+        <input type="range" id="miniOpacitySlider" min="0" max="100" value="90" style="accent-color:var(--accent); cursor:pointer;">
+        <div id="miniOpacityVal" style="font-size:11px; color:white; text-align:right;">90%</div>
+    </div>
+</div>
         <!-- DURATION -->
         <div class="tool-group" id="durationGroup">
             <button class="dur-btn" data-mins="30">30m</button>
@@ -973,7 +987,7 @@ map.on('click', 'warnings-shading', (e) => {
         
         map.flyTo({
             center: center,
-            zoom: 10, // Zoom in to a level where detail is visible
+            zoom: 9.5, // Zoom in to a level where detail is visible
             essential: true,
             duration: 1200 // Smooth transition in milliseconds
         });
@@ -1830,6 +1844,30 @@ map.addSource('lightning-data', {
         }
     }, 'road-shields');
 
+    map.addSource('sample-labels', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+    });
+
+    map.addLayer({
+        id: 'sample-layer',
+        type: 'symbol',
+        source: 'sample-labels',
+        layout: {
+            'text-field': ['get', 'value'],
+            'text-font': ['Noto Sans Bold'],
+            'text-size': 16,
+            'text-anchor': 'center', // Fixes text directly on the point
+            'text-allow-overlap': true, // Ensures labels show even if crowded
+            'text-ignore-placement': true
+        },
+        paint: {
+            'text-color': '#00ff92',
+            'text-halo-color': '#000000',
+            'text-halo-width': 2
+        }
+    });
+
 map.addLayer({
     id: 'spotlight-layer',
     type: 'fill',
@@ -2042,6 +2080,9 @@ function setMode(nextMode) {
                     features: []
                 });
 
+                activeSamples = [];
+                map.getSource('sample-labels').setData({ type: 'FeatureCollection', features: [] });
+
                 document.getElementById('help').innerHTML = "ALL DRAWINGS & LABELS CLEARED";
                 applyWarningIsolation();
 
@@ -2053,6 +2094,82 @@ function setMode(nextMode) {
             }
     updateCardVisibility();
 }
+
+let isSampleMode = false;
+let activeSamples = []; // Array to store placed samples
+let currentCogData = null; // Stores the georaster object for the active COG
+
+// 2. The Sampling Logic
+const sampleBtn = document.getElementById('sampleToggle');
+
+sampleBtn.onclick = () => {
+    isSampleMode = !isSampleMode;
+    
+    if (isSampleMode) {
+        // Force off Road ID and Warning Isolation
+        isIdMode = false;
+        document.getElementById('idModeBtn').style.backgroundColor = "";
+        //resetWarningIsolation();
+        
+        // Switch map to Pan so you can navigate while sampling
+        setMode('pan');
+        document.getElementById('help').innerHTML = "EYEDROPPER ACTIVE: CLICK DATA TO SAMPLE VALUE";
+    }
+
+    // UI Feedback
+    sampleBtn.style.color = isSampleMode ? '#ffffff' : '#a9e7ff';
+    sampleBtn.style.background = isSampleMode ? 'rgba(56, 189, 248, 0.4)' : 'transparent';
+    sampleBtn.style.borderRadius = '4px';
+    map.getCanvas().style.cursor = isSampleMode ? 'copy' : '';
+};
+
+function getSampleAtLngLat(lng, lat) {
+    if (!window.activeGeoRaster) return null;
+
+    const { xmin, ymax, pixelWidth, pixelHeight, values } = window.activeGeoRaster;
+    
+    const x = (lng * 20037508.34) / 180;
+    const y = Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180);
+    const mercY = (y * 20037508.34) / 180;
+
+    const col = Math.floor((x - xmin) / pixelWidth);
+    const row = Math.floor((ymax - mercY) / pixelHeight);
+
+    if (values[0] && values[0][row] && values[0][row][col] !== undefined) {
+        let val = values[0][row][col];
+        if (val <= 0) return null; 
+
+        // Both Hail (mesh) and Rain (qpe) are in mm, so both need / 25.4
+        // Rounding to .toFixed(1) for tenths of an inch
+        return (val / 25.4).toFixed(1) + '"'; 
+    }
+    return null;
+}
+
+// 3. Map Interactions
+map.on('click', (e) => {
+    if (!isSampleMode) return;
+    
+    const value = getSampleAtLngLat(e.lngLat.lng, e.lngLat.lat);
+    if (value) {
+        activeSamples.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+            properties: { value: value }
+        });
+        map.getSource('sample-labels').setData({
+            type: 'FeatureCollection',
+            features: activeSamples
+        });
+    }
+});
+
+// Update the Hover Tooltip (Optional but helpful)
+map.on('mousemove', (e) => {
+    if (!isSampleMode) return;
+    const value = getSampleAtLngLat(e.lngLat.lng, e.lngLat.lat);
+    map.getCanvas().style.cursor = value ? 'copy' : 'crosshair';
+});
 
 function clearStorm() {
     map.getSource('storm').setData({
@@ -2076,14 +2193,19 @@ document.getElementById('idModeBtn').onclick = () => {
     const btn = document.getElementById('idModeBtn');
     
     if (isIdMode) {
+        // NEW: Turn off Eyedropper
+        isSampleMode = false;
+        sampleBtn.style.background = 'transparent';
+        sampleBtn.style.color = '#a9e7ff';
+
         btn.innerHTML = "ID<br>ROADS";
-        btn.style.backgroundColor = "#3c7bba"; // Red visual cue
+        btn.style.backgroundColor = "#3c7bba";
         map.getCanvas().style.cursor = 'help';
+        document.getElementById('help').innerHTML = "ROAD ID ACTIVE: CLICK TO SAMPLE MAJOR ROADS";
     } else {
-        // --- THE CLEAN SLATE LOGIC ---
-        btn.innerHTML = "ID<br>ROADS";
         btn.style.backgroundColor = ""; 
         map.getCanvas().style.cursor = '';
+    
 
         //activeLabels = []; // Wipe the array
         //map.getSource('persistent-labels').setData({
@@ -3100,9 +3222,26 @@ try {
 }
 // Update your existing onchange handler
 document.getElementById('radarSelector').onchange = async (e) => {
+
+    const currentOpacity = document.getElementById('miniOpacitySlider').value / 100;
     const parts = e.target.value.split('|');
     const folder = parts[0]; 
     const layer = parts[1];  
+// --- TOGGLE EYEDROPPER VISIBILITY ---
+    if (folder === 'cog') {
+        sampleBtn.style.display = 'flex';
+    } else {
+        sampleBtn.style.display = 'none';
+        // Force sampling mode off if the tool is hidden
+        isSampleMode = false;
+        sampleBtn.style.background = 'transparent';
+        sampleBtn.style.color = '#a9e7ff';
+        map.getCanvas().style.cursor = '';
+    }
+    activeSamples = []; // Reset the sampling array
+    if (map.getSource('sample-labels')) {
+        map.getSource('sample-labels').setData({ type: 'FeatureCollection', features: [] });
+    }
     const legendEl = document.getElementById('cogLegend'); // The legend container
     console.log("Layer selected:", layer, "Config exists:", typeof COG_CONFIG !== 'undefined' ? !!COG_CONFIG[layer] : "File not loaded");
 // Global to store the active timestamp for the export canvas
@@ -3200,8 +3339,13 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
             try {
                 const response = await fetch(url);
                 const arrayBuffer = await response.arrayBuffer();
-                const georaster = await parseGeoraster(arrayBuffer);
-                
+
+                // 1. Explicitly use the global georaster library to parse
+                // 2. Assign it to window.activeGeoRaster so the Eyedropper can see it
+                window.activeGeoRaster = await window.parseGeoraster(arrayBuffer);
+
+                // 3. Create a local reference so the rest of your loadCOG math doesn't break
+                const georaster = window.activeGeoRaster;           
                 const canvas = document.createElement("canvas");
                 canvas.width = georaster.width;
                 canvas.height = georaster.height;
@@ -3256,7 +3400,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
                     id: refreshId,
                     type: "raster",
                     source: `${refreshId}-source`,
-                    paint: { 'raster-resampling': 'nearest', 'raster-opacity': 0.9 }
+                    paint: { 'raster-resampling': 'nearest', 'raster-opacity': currentOpacity }
                 }, 'radar');
 
                 map.once('idle', () => {
@@ -3280,6 +3424,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
         // --- STANDARD WMS LOGIC ---
         const source = map.getSource('radar');
         map.setLayoutProperty('radar', 'visibility', 'visible');
+        map.setPaintProperty('radar', 'raster-opacity', currentOpacity);
         let url = folder === 'sat' 
             ? `https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLE=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`
             : `https://opengeo.ncep.noaa.gov/geoserver/${folder}/${layer}/ows?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`;
@@ -3713,6 +3858,39 @@ function updateLightningData() {
 
 // Set the interval to call our "Smart" function
 setInterval(updateLightningData, 60000);
+
+const opToggle = document.getElementById('opacityToggle');
+const opMenu = document.getElementById('opacityMenu');
+const opSlider = document.getElementById('miniOpacitySlider');
+const opText = document.getElementById('miniOpacityVal');
+
+// Toggle menu visibility
+opToggle.onclick = (e) => {
+    e.stopPropagation();
+    const isVisible = opMenu.style.display === 'flex';
+    opMenu.style.display = isVisible ? 'none' : 'flex';
+};
+
+// Close menu if clicking elsewhere on map
+map.on('mousedown', () => { opMenu.style.display = 'none'; });
+
+// Universal Opacity Function
+opSlider.oninput = (e) => {
+    const val = e.target.value / 100;
+    opText.innerText = e.target.value + '%';
+
+    // Update standard WMS Radar
+    if (map.getLayer('radar')) {
+        map.setPaintProperty('radar', 'raster-opacity', val);
+    }
+
+    // Update active COG/Satellite layers
+    map.getStyle().layers.forEach(layer => {
+        if (layer.id.startsWith('cog-') || layer.id.startsWith('sat-')) {
+            map.setPaintProperty(layer.id, 'raster-opacity', val);
+        }
+    });
+};
 </script>
 </body>
 </html>

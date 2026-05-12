@@ -518,7 +518,7 @@ body{
     border-color: #6ae6ff;
 }
 #lightningToggle.active {
-    background: #fde047 !important; /* Bright Yellow */
+    background: #e7840b !important; /* Bright Yellow */
     color: #000000 !important;
     border-color: #ffffff;
     box-shadow: 0 0 10px rgba(253, 224, 71, 0.5);
@@ -930,7 +930,7 @@ map.on('click', 'warnings-shading', (e) => {
     const feat = e.features[0];
     
     // Debugging line: Open your console (F12) to see if the click is registering
-    console.log("Clicked Event:", feat.properties.event);
+    console.log("Clicked Event:", feat.properties);
     
     // 1. Clear the old selection state using the numeric ID
     if (isolatedWarningId !== null) {
@@ -983,9 +983,9 @@ const expireStr = expireDate.toLocaleTimeString([], {
         const iconColor = isDarkText ? '#000000' : '#FFFFFF';
 
 // --- Advanced Hazard Parsing (Fixed for JSON strings) ---
-let params = props.parameters || {};
-
 // If parameters is a string (common in MapLibre/GeoJSON processing), parse it
+// 1. Parse parameters if it's a string, otherwise use as is
+let params = props.parameters || {};
 if (typeof params === 'string') {
     try {
         params = JSON.parse(params);
@@ -994,16 +994,22 @@ if (typeof params === 'string') {
     }
 }
 
-// 1. Update the parsing logic (around line 457)
-const wind = params.maxWindGust && params.maxWindGust[0] ? params.maxWindGust[0] : null;
+// 2. Wind: Only show if > 0
+const rawWind = params.maxWindGust && params.maxWindGust[0] ? parseInt(params.maxWindGust[0]) : 0;
+const wind = rawWind > 0 ? params.maxWindGust[0] : null;
 
-// Use 'hail' as the variable name to satisfy the template
-const rawHail = params.maxHailSize && params.maxHailSize[0] ? params.maxHailSize[0] : null;
+// 3. Hail: Only show if > 0.00
+const rawValue = params.maxHailSize && params.maxHailSize[0] ? parseFloat(params.maxHailSize[0]) : 0;
+const rawHail = rawValue > 0 ? rawValue : null; 
 const hailDesc = rawHail ? getHailDescription(rawHail) : null;
-const hail = rawHail ? `${rawHail}" ${hailDesc}` : null; // This defines 'hail'
+const hail = rawHail ? `${rawHail}" ${hailDesc}` : null; 
 
-// Flood/Tornado/Water Hazards
-const torn = props.tornadoDetection ? `TORNADO ${props.tornadoDetection}` : null;
+// 4. Tornado: Target the first index of the array
+const torn = (params.tornadoDetection && params.tornadoDetection[0]) 
+    ? `TORNADO IS ${params.tornadoDetection[0]}` 
+    : null;
+
+// 5. Others
 const water = params.waterspoutDetection && params.waterspoutDetection[0] ? `WATERSPOUT ${params.waterspoutDetection[0]}` : null;
 const ffDetection = params.flashFloodDetection ? params.flashFloodDetection[0] : null;
 const ffThreat = params.flashFloodDamageThreat ? params.flashFloodDamageThreat[0] : null;

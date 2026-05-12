@@ -52,15 +52,24 @@ body{
     flex-direction: column;
     gap: 8px;
     z-index: 20;
+    background: rgba(0, 49, 88, 0.45);
+    padding: 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(7px);
+    border: 3px solid rgba(255, 255, 255, 0.2);
 
-    /* Add these lines */
-    background: rgba(0, 49, 88, 0.45); /* Dark blue with 75% opacity */
-    padding: 10px;                     /* Added padding so the bg is visible around items */
-    border-radius: 12px;               /* Smoothes the corners */
-    backdrop-filter: blur(7px);       /* Optional: creates a frosted glass effect */
-    border: 3px solid rgba(255, 255, 255, 0.2); /* Subtle border to define the edge */
+    opacity: 1;
+    transition: opacity 0.3s ease-in-out;
 }
 
+/* after 7s fade down */
+.toolbar.dim {
+    opacity: 0.5;
+}
+
+.toolbar:hover {
+    opacity: 1;
+}
 /* row system */
 .toolbar-row{
     display:flex;
@@ -982,15 +991,15 @@ const hailDesc = rawHail ? getHailDescription(rawHail) : null;
 const hail = rawHail ? `${rawHail}" ${hailDesc}` : null; // This defines 'hail'
 
 // Flood/Tornado/Water Hazards
-const torn = props.tornadoDetection ? `Tornado: ${props.tornadoDetection}` : null;
-const water = params.waterspoutDetection && params.waterspoutDetection[0] ? `Waterspout: ${params.waterspoutDetection[0]}` : null;
+const torn = props.tornadoDetection ? `TORNADO ${props.tornadoDetection}` : null;
+const water = params.waterspoutDetection && params.waterspoutDetection[0] ? `WATERSPOUT ${params.waterspoutDetection[0]}` : null;
 const ffDetection = params.flashFloodDetection ? params.flashFloodDetection[0] : null;
 const ffThreat = params.flashFloodDamageThreat ? params.flashFloodDamageThreat[0] : null;
 
 // 2. Update the HTML Template (around line 485)
 // Ensure every variable used here is defined above
 const popupHtml = `
-    <div id="warn-popup-${warnId}" class="movable-popup" style="width:280px; padding:12px; cursor: default;font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
+    <div id="warn-popup-${warnId}" class="movable-popup" style="width:300px; padding:12px; cursor: default;font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
         <div class="popup-handle" style="cursor:move; height:14px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:flex-end; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
             <button class="close-warn-btn" onclick="closeWarningPopup()" style="background:rgba(0,0,0,0.2); color:${iconColor}; border:1px solid rgba(0,0,0,0.1); border-radius:4px; width:22px; height:22px; cursor:text; font-weight:bold; opacity:0; transition:opacity 0.2s; display:flex; align-items:center; justify-content:center; font-size:11px;">✕</button>
         </div>
@@ -1009,12 +1018,12 @@ const popupHtml = `
             <div style="background:#fff1f2; border:1px solid #fecaca; padding:8px; border-radius:6px; margin:5px 0;">
                 <b style="color:#991b1b; font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">Hazards</b>
                 <div contenteditable="true" class="edit-target" style="outline:none;">
-                    ${torn ? `<div style="font-size:12px;">${torn}</div>` : ''}
+                    ${torn ? `<div style="font-size:12px; color: #a855f7;"><b>${torn}</b></div>` : ''}
                     ${wind ? `<div style="font-size:12px;"><b>Wind:</b> ${wind}</div>` : ''}
                     ${hail ? `<div style="font-size:12px;"><b>Hail:</b> ${hail}</div>` : ''}
                     ${ffDetection ? `<div style="font-size:12px;"><b>Detection:</b> ${ffDetection}</div>` : ''}
                     ${ffThreat ? `<div style="font-size:12px;"><b>Threat:</b> ${ffThreat}</div>` : ''}
-                    ${water ? `<div style="font-size:12px;">${water}</div>` : ''}
+                    ${water ? `<div style="font-size:12px; color: #a855f7;"><b>${water}</b></div>` : ''}
                 </div>
             </div>` : ''}
 
@@ -1638,6 +1647,7 @@ map.addLayer({
     id: 'road-shields-hide',
     type: 'symbol',
     source: 'esri-base',
+    minzoom: 6, // Ensure it can be "hit" even when zoomed out
     'source-layer': 'Road/label',
     layout: {
         'text-field': ['get', '_name'],
@@ -1700,8 +1710,9 @@ map.on('click', (e) => {
         // Stop the click from opening warning popups
         e.originalEvent.stopPropagation();
         
-  const p = features[0].properties;
-        let roadName = p._name || p._name_global || p.name || p._ref || "Road";
+ // tracker.html around line 999
+const p = features[0].properties;
+let roadName = p._name || p._name_global || p.name || p._ref || p.ref || "Local Road";
 
         // --- NEW: CLEANUP LOGIC FOR SPECIFIC FL ROADS ---
         // We use a regex with 'i' (case-insensitive) and handle optional dashes
@@ -2782,9 +2793,13 @@ async function loadPOIs() {
         { name: "Cocoa (Brevard)", lat: 28.369, lon: -80.743 },
         { name: "Palm Bay (Brevard)", lat: 28, lon: -80.67 },
         { name: "Satellite Beach (Brevard)", lat: 28.173, lon: -80.596 },
+        { name: "Indiatlantic (Brevard)", lat: 28.088, lon: -80.565 },
+        { name: "Patrick SFB (Brevard)", lat: 28.234, lon: -80.609 },
+        { name: "Canaveral SFS (Brevard)", lat: 28.489, lon: -80.579 },
+        { name: "Port Canaveral (Brevard)", lat: 28.411, lon: -80.607 },
         { name: "Mims (Brevard)", lat: 28.668, lon: -80.847 },
         { name: "Barefoot Bay (Brevard)", lat: 27.886, lon: -80.53 },
-        { name: "Viera - Suntree (Brevard)", lat: 28.256, lon: -80.733 },
+        { name: "Viera - Suntree (Brevard)", lat: 28.236, lon: -80.733, pop: 30000 },
         { name: "Cocoa Beach (Brevard)", lat: 28.3126, lon: -80.6136 },
         { name: "Kissimmee (Osceola)", lat: 28.292, lon: -81.412 },
         { name: "Celebration (Osceola)", lat: 28.324, lon: -81.543 },
@@ -2803,6 +2818,7 @@ async function loadPOIs() {
         { name: "Tradition (St. Lucie)", lat: 27.265, lon: -80.439 },
         { name: "White City (St. Lucie)", lat: 27.37, lon: -80.335 },
         { name: "St Lucie Fairgrounds (St. Lucie)", lat: 27.368, lon: -80.486 },
+        { name: "St Lucie Nuclear Plant (St. Lucie)", lat: 27.346, lon: -80.244 },
         { name: "Lakewood Park (St. Lucie)", lat: 27.546, lon: -80.4 },
         { name: "Okeechobee (Okeechobee)", lat: 27.2476, lon: -80.835 },
         { name: "Okee-Tantee (Okeechobee)", lat: 27.158, lon: -80.865 },
@@ -2860,7 +2876,7 @@ try {
         customCities.forEach(city => {
             // These usually don't have pop data, so they'll only stay 
             // if no NWS version with pop data exists.
-            processLocation(city.name, [city.lon, city.lat], null);
+            processLocation(city.name, [city.lon, city.lat], city.pop || null);
         });
 
         // Convert the "best" object back into a feature array
@@ -2871,35 +2887,55 @@ try {
             data: { type: 'FeatureCollection', features: flCitiesGeo }
         });
 
-        map.addLayer({
-            id: 'poi-labels',
-            type: 'symbol',
-            source: 'poi-cities',
-            layout: {
-                'text-field': ['get', 'name'],
-'text-size': [
-    'interpolate',
-    ['linear'],
-    ['get', 'priority'],
-    0, 15,          // No population? 12px font
-    50000, 20,      // 50k people? 18px font
-    200000, 28      // 200k+ people? 28px font
+      map.addLayer({
+    id: 'poi-labels',
+    type: 'symbol',
+    source: 'poi-cities',
+    layout: {
+        'text-field': ['get', 'name'],
+        'text-size': [
+    'step',
+    ['zoom'],
+    // 0 to 8.4: ONLY Large cities (>50k)
+    [
+        'case',
+        ['>', ['get', 'priority'], 50000], 
+        ['interpolate', ['linear'], ['get', 'priority'], 50000, 23, 200000, 29],
+        0
+    ],
+    // 8.5 to 9.4: Mid-size cities (>10k) join in
+    7.5, [
+        'case',
+        ['>', ['get', 'priority'], 50000], 
+        ['interpolate', ['linear'], ['get', 'priority'], 50000, 23, 200000, 29],
+        ['>', ['get', 'priority'], 10000], 
+        ['interpolate', ['linear'], ['get', 'priority'], 10000, 15, 50000, 20],
+        0
+    ],
+    // 9.5 and up: EVERYONE is visible
+    8.5, [
+        'interpolate',
+        ['linear'],
+        ['get', 'priority'],
+        0, 15,
+        10000, 15,
+        50000, 23,
+        200000, 29
+    ]
 ],
-// This ensures big cities stay on top of small ones
-'symbol-sort-key': ['-', ['get', 'priority']],
-                'text-font': ['Noto Sans Bold'],
-                'symbol-sort-key': ['-', 10000000, ['coalesce', ['get', 'priority'], 0]],
-                'text-variable-anchor': ['center'], 
-                'text-padding': 2,
-                'text-ignore-placement': false,
-                'text-allow-overlap': false
-            },
-            paint: {
-                'text-color': 'rgba(250,250,250,1)',
-                'text-halo-color': 'rgba(15,23,42,1)',
-                'text-halo-width': 1.5
-            }
-        });
+        'text-font': ['Noto Sans Bold'],
+        // Standard sort: Big cities on top
+        'symbol-sort-key': ['-', 10000000, ['coalesce', ['get', 'priority'], 0]],
+        'text-variable-anchor': ['center'], 
+        'text-padding': 2,
+        'text-allow-overlap': false
+    },
+    paint: {
+        'text-color': 'rgba(250,250,250,1)',
+        'text-halo-color': 'rgba(15,23,42,1)',
+        'text-halo-width': 2.5
+    }
+});
 
     } catch (e) {
         console.error("Error loading NWS GeoJSON:", e);
@@ -3338,6 +3374,7 @@ function getHailDescription(sizeStr) {
     if (size >= 0.88) return "(Nickel)";
     if (size >= 0.75) return "(Penny)";
     if (size >= 0.50) return "";
+    if (size >= 0.25) return "(Pea)";
     return "";
 }
 
@@ -3441,6 +3478,7 @@ if (document.activeElement.tagName === 'INPUT' ||
         case 's': setMode('spotlight'); break;
         case 't': document.getElementById('addTextBtn').click(); break; // Open Text Box
         case 'w': document.getElementById('warningToggle').click(); break; // Toggle Warnings
+        case 'r': document.getElementById('idModeBtn').click(); break; // Toggle Warnings
         case 'e': document.getElementById('exportBtn').click(); break;
         
         case 'c': 
@@ -3452,6 +3490,9 @@ if (document.activeElement.tagName === 'INPUT' ||
             break;
     }
 });
+setTimeout(() => {
+    document.querySelector('.toolbar').classList.add('dim');
+}, 7000);
 </script>
 </body>
 </html>

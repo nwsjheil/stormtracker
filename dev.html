@@ -961,9 +961,25 @@ console.log(map.getStyle().layers);
     // Click to Query
 map.on('click', 'warnings-shading', (e) => {
     if (!e.features || e.features.length === 0) return; // Guard clause
+    const feat = e.features[0];
+
+    const currentZoom = map.getZoom();
+
+    // --- NEW: AUTO-CENTER & ZOOM LOGIC ---
+    // If zoomed out more than level 8, fly to the warning
+    if (currentZoom < 8) {
+        // Calculate the center of the clicked polygon using Turf
+        const center = turf.center(feat).geometry.coordinates;
+        
+        map.flyTo({
+            center: center,
+            zoom: 10, // Zoom in to a level where detail is visible
+            essential: true,
+            duration: 1200 // Smooth transition in milliseconds
+        });
+    }
     
     e.originalEvent.stopPropagation();
-    const feat = e.features[0];
     
     // Debugging line: Open your console (F12) to see if the click is registering
     console.log("Clicked Event:", feat.properties);

@@ -591,8 +591,9 @@ body{
                     <option value="kfll|kfll_bref1">FLL</option>
                     <option value="ktpa|ktpa_bref1">TPA</option>
                 </optgroup>
-                <optgroup label="PRECIPITATION">
+                <optgroup label="MRMS">
     <option value="cog|mrms_1h_qpe">1H QPE (exp)</option>
+    <option value="cog|mrms_mesh">Hail Size (exp)</option>
 </optgroup>
                 <optgroup label="Satellite">
 <option value="sat|goes_visible_imagery">VIS</option>
@@ -2993,7 +2994,7 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
     // --- COG DATA LOADING ---
     if (folder === 'cog') {
         const loadCOG = async () => {
-            const url = `https://nwsjheil.github.io/stormtracker/output/${layer}_cog.tif?t=${Date.now()}`;
+            const url = `http://159.65.236.118/output/${layer}_southeast_cog.tif?t=${Date.now()}`;
             const refreshId = `cog-${Date.now()}`;
             
             try {
@@ -3015,8 +3016,8 @@ if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) 
                         
                         // FUTURE PROOF: Pick ramp based on layer
                         let rgba;
-                        if (layer.includes('hail')) {
-                             // rgba = colorRampHail(val); // You'd define this later
+                        if (layer.includes('mesh')) {
+                            rgba = colorRampHail(val); // You'd define this later
                         } else {
                              rgba = colorRamponeHRMRMR(val / 25.4); // Standard Rain
                         }
@@ -3438,6 +3439,31 @@ function colorRamponeHRMRMR(inches) {
     if (inches < 8.00) return [223, 253, 253, 255];
     
     return [255, 255, 194, 255]; // 8.0+ (Cream)
+}
+function colorRampHail(mm) {
+    const inches = mm / 25.4; 
+    if (inches < 0.25) return null; // Noise floor
+
+    // BLUE TO GREEN (Sub-Severe)
+    if (inches < 0.50) return [1, 160, 246, 255];   // 0.25" - Blue (#01a0f6)
+    if (inches < 1.00) return [0, 236, 236, 255];   // 0.50" - Light Cyan (#00ecec)
+    
+    // YELLOW AT 1.00" (Severe Milestone: Quarter)
+    if (inches < 1.50) return [255, 255, 0, 255];   // 1.00" - Yellow (#ffff00)
+    if (inches < 1.75) return [255, 144, 0, 255];   // 1.50" - Orange (#ff9000)
+
+    // RED AT 1.75" (Severe Milestone: Golf Ball)
+    if (inches < 2.00) return [255, 0, 0, 255];     // 1.75" - Red (#ff0000)
+    
+    // MAROON AT 2.00" (Hen Egg)
+    if (inches < 2.50) return [128, 0, 0, 255];     // 2.00" - Maroon (#800000)
+
+    // PURPLE / MAGENTA BY 2.50" (Tennis Ball)
+    if (inches < 3.00) return [255, 0, 255, 255];   // 2.50" - Magenta (#ff00ff)
+    if (inches < 4.00) return [153, 85, 201, 255];  // 3.00" - Purple (#9955c9)
+
+    // WHITE BY 4.00" (Softball+)
+    return [255, 255, 255, 255];                    // 4.00"+ - White (#ffffff)
 }
 window.addEventListener('keydown', (e) => {
     // 1. Safety check: Don't fire if typing in text boxes

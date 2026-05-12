@@ -65,7 +65,7 @@ body{
 
 /* after 7s fade down */
 .toolbar.dim {
-    opacity: 0.5;
+    opacity: 0.7;
 }
 
 .toolbar:hover {
@@ -244,6 +244,21 @@ body{
     user-select: none;
     -webkit-print-color-adjust: exact; /* Helps some browsers render colors in capture */
     display: none;
+}
+
+#impacts {
+    max-height: 380px; /* Limits height to roughly 10-12 city rows */
+    overflow-y: auto;  /* Enables vertical scrolling */
+    padding-right: 5px; /* Prevents scrollbar from overlapping text */
+}
+
+/* Optional: Style the scrollbar for a cleaner look */
+#impacts::-webkit-scrollbar {
+    width: 6px;
+}
+#impacts::-webkit-scrollbar-thumb {
+    background: rgba(169, 231, 255, 0.3);
+    border-radius: 10px;
 }
 
 .export-map-overlay {
@@ -647,7 +662,7 @@ body{
     </div>
 </div>
         <!-- DURATION -->
-        <div class="tool-group" id="durationGroup">
+        <div class="tool-group" id="durationGroup" style="display: none !important;">
             <button class="dur-btn" data-mins="30">30m</button>
             <button class="dur-btn active" data-mins="60">1h</button>
             <button class="dur-btn" data-mins="120">2h</button>
@@ -658,7 +673,7 @@ body{
             <input type="range" id="widthSlider" min="20" max="50" value="30">
             <span id="widthVal" style="font-size:15px; color:#94a3b8;">30</span>
         </div>
-        <div class="tool-group">
+        <div class="tool-group" id="clearTrackGroup" style="display: none !important;">
             <div class="tool danger-btn" id="clearBtn">CLEAR<br>TRACK</div>
         </div>
 
@@ -2004,7 +2019,14 @@ function setMode(nextMode) {
 
     // Remove 'active' state from all buttons
     Object.values(buttons).forEach(b => b.classList.remove('active'));
-
+    
+    // --- NEW: Toggle Duration Group Visibility ---
+    const durGroup = document.getElementById('durationGroup');
+    if (mode === 'cone' || mode === 'manual') {
+        durGroup.style.setProperty('display', 'flex', 'important');
+    } else {
+        durGroup.style.setProperty('display', 'none', 'important');
+    }
     // Select the map canvas container to manipulate the cursor
     const canvas = map.getCanvasContainer();
     
@@ -2176,6 +2198,7 @@ function clearStorm() {
         type: 'FeatureCollection',
         features: []
     });
+    document.getElementById('clearTrackGroup').style.setProperty('display', 'none', 'important');
     document.getElementById('mph').innerText = '0 MPH';
     stormLine = [];
     startPoint = null;
@@ -2508,7 +2531,8 @@ if (currentDrawing.length > 1) {
 
 function drawProjectedTracker(mouse) {
 if (stormLine.length < 2) return;
-
+    // Show the clear button as soon as we start drawing
+    document.getElementById('clearTrackGroup').style.setProperty('display', 'flex', 'important');
     const edgeLine = turf.lineString(stormLine);
     const edgeLen = turf.length(edgeLine, { units: 'miles' });
     const centerPoint = turf.along(edgeLine, edgeLen / 2, { units: 'miles' });
@@ -2580,6 +2604,8 @@ map.getSource('storm').setData({
 
 // Change the parameter from 'width' to use our global 'coneWidth'
 function drawCone(start, end, speedMPH) { 
+    // Show the clear button as soon as we start drawing
+    document.getElementById('clearTrackGroup').style.setProperty('display', 'flex', 'important');
     // The intensity (color) and speed should be based on the speedMPH (the mouse),
     // while the geometry is based on the 'end' point (the duration).
     const visualDist = turf.distance(start, end, {units: 'miles'});
@@ -2761,7 +2787,8 @@ function drawETAs(line) {
     if (allImpacted.length === 0) return;
 
     // --- RENDER SIDEBAR ---
-    const sidebarCities = [...allImpacted].sort((a, b) => a.properties.distToImpact - b.properties.distToImpact).slice(0, 15);
+   // Sort by impact time and show more cities (the CSS will handle the height)
+    const sidebarCities = [...allImpacted].sort((a, b) => a.properties.distToImpact - b.properties.distToImpact).slice(0, 40);
     sidebarCities.forEach(city => {
         const timeStr = city.properties.arrivalTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
         const row = document.createElement('div');

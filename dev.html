@@ -741,30 +741,16 @@ widthSlider.oninput = (e) => {
 const map = new maplibregl.Map({
     container: 'map',
     preserveDrawingBuffer: true,
-    style: 'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/resources/styles/root.json',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json',
     center: [-81.4, 28.5],
     zoom: 7,
-    // THE FIX: Intercept and rewrite relative Esri URLs
-    transformRequest: (url, resourceType) => {
-        const esriBase = 'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/';
-        
-        // Check if the URL is trying to use a relative path
-        if (url.startsWith('../') || url.startsWith('./')) {
-            // Fix Sprites
-            if (resourceType === 'SpriteJSON' || resourceType === 'SpriteImage') {
-                return { url: url.replace(/^.*?\.\.\//, esriBase + 'resources/') };
-            }
-            // Fix Tiles and Sources
-            if (resourceType === 'Source' || resourceType === 'Tile') {
-                return { url: url.replace(/^.*?\.\.\//, esriBase) };
-            }
+transformRequest: (url, resourceType) => {
+        if (resourceType === 'Glyphs') {
+            // This redirects font requests from CartoDB to OpenFreeMap's server
+            return {
+                url: url.replace('https://tiles.basemaps.cartocdn.com/fonts', 'https://tiles.openfreemap.org/fonts')
+            };
         }
-        
-        // Fix for the specific 404: Esri tile requests often need the trailing slash removed or redirected
-        if (url === esriBase + 'tile/') {
-            return { url: esriBase };
-        }
-
         return { url: url };
     }
 });
@@ -810,6 +796,40 @@ const spotBtn = document.getElementById('spotBtn');
 ========================================= */
 
 map.on('load', () => {
+
+    const layers = map.getStyle().layers;
+
+    layers.forEach(layer => {
+        // Target anything that is a road, bridge, tunnel, or transit line
+        const isRoad = layer.id.includes('road') || 
+                       layer.id.includes('bridge') || 
+                       layer.id.includes('tunnel') ||
+                       layer.id.includes('highway') ||
+                       layer.id.includes('transit');
+
+        if (isRoad) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+        }
+    });
+
+    // Check if the background layer exists and change it to dark gray
+    if (map.getLayer('background')) {
+        map.setPaintProperty('background', 'background-color', '#474749');
+    }
+    
+    // Optional: If there are water layers, make them a slightly different gray
+    if (map.getLayer('water')) {
+        map.setPaintProperty('water', 'fill-color', '#232227');
+    }   
+    if (map.getLayer('park_nature_reserve')) {
+        map.setPaintProperty('park_nature_reserve', 'fill-color', '#474749');
+    }
+    if (map.getLayer('landuse_residential')) {
+        map.setPaintProperty('landuse_residential', 'fill-color', '#515153');
+    }
+    if (map.getLayer('landcover')) {
+        map.setPaintProperty('landcover', 'fill-color', '#474749');
+    }
     // 1. Define the Vector Source
     map.addSource('esri-base', {
         type: 'vector',
@@ -854,7 +874,7 @@ map.on('load', () => {
         });
 
     });
-
+console.log(map.getStyle().layers);
 
     // 2. Define the Radar Source
     map.addSource('radar', {
@@ -1277,19 +1297,19 @@ map.addLayer({
         ['in', ['get', '_symbol'], ['literal', [4,5]]]
     ],
 
-    minzoom: 11,
+    minzoom: 9,
 
     paint: {
 
         // outline
-        'line-color': '#ffffff',
+        'line-color': '#191919',
 
         'line-width': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            11, 1.5,
-            14, 6
+            9, 2,
+            14, 9
         ],
 
         'line-opacity': 0.95
@@ -1307,18 +1327,18 @@ map.addLayer({
         ['in', ['get', '_symbol'], ['literal', [4,5]]]
     ],
 
-    minzoom: 11,
+    minzoom: 9,
 
     paint: {
 
-        'line-color': '#cbd5e1',
+        'line-color': '#acaca7',
 
         'line-width': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            11, 1,
-            14, 4
+            9, 1,
+            14, 7
         ],
 
         'line-opacity': 1

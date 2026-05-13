@@ -160,6 +160,28 @@ const COG_CONFIG = {
             { label: '15"',  color: '#ebc2c2' }  // sampled above 15
         ]
     },
+    'flash_soil': {
+    title: "ESTIMATED SOIL SATURATION (%, CREST MODEL)",
+    steps: [
+        { label: '50% (Moist)', color: '#c7e9c0' },      // Light Green
+        { label: '75% (High)', color: '#66c2a4' },       // Teal
+        { label: '85% (Nearly Saturated)', color: '#2b8cbe' }, // Blue
+        { label: '95% (Likely Saturated)', color: '#08306b' }, // Deep Blue
+        { label: '100% (Fully Saturated)', color: '#49006a' }  // Dark Violet
+    ]
+},
+    'flash_stream': {
+        title: "UNIT STREAMFLOW & POTENTIAL FLOOD IMPACT (cfs/mi², CREST MODEL)",
+        steps: [
+            { label: '0', color: 'rgb(70, 70, 70)' },            // Gray (Start of Gray Block)
+            { label: '100 (Runoff)', color: 'rgb(176, 175, 0)' },   // Yellow (Start of Yellow Block)
+            { label: '200 (Few Impacts)', color: 'rgb(253, 168, 4)' },      // Orange (Start of Orange Block)
+            { label: '300 (Moderate)', color: 'rgb(254, 4, 0)' },             // Red (Start of Red Block)
+            { label: '600 (Significant)', color: 'rgb(97, 0, 141)' },    // Pink/Purple (Start of Pink Block)
+            { label: '1000 (Extreme)', color: 'rgb(2, 0, 250)' },          // Blue (Start of Blue Block)
+            { label: '2000+ (Catastrophic)', color: 'rgb(255, 255, 255)' }      // White (Start of White Block)
+        ]
+    },
 };
 
 /**
@@ -424,4 +446,92 @@ function colorRampReflectivity(dbz) {
             ];
         }
     }
+}
+
+function colorRampSoilProbability(pct) {
+    // No coloring below 50
+    //pct = pct + 25
+    if (pct < 50) return null;
+
+const stops = [
+        // 50-74: Light Green to Deep Emerald (Healthy Moisture)
+        { val: 50, col: [199, 233, 192, 255] }, // #c7e9c0
+        { val: 74, col: [35, 139, 69, 255] },   // #238b45
+
+        // 75-84: Teal to Cyan (Approaching Saturation)
+        { val: 75, col: [102, 194, 164, 255] }, // #66c2a4
+        { val: 84, col: [44, 162, 190, 255] },  // #2ca2be
+
+        // 85-94: Bright Blue to Deep Blue (Nearly Saturated)
+        { val: 85, col: [43, 140, 190, 255] },  // #2b8cbe
+        { val: 94, col: [8, 81, 156, 255] },    // #08519c
+
+        // 95-100: Deep Blue to Dark Violet (Fully Saturated/Standing Water)
+        { val: 95, col: [8, 48, 107, 255] },    // #08306b
+        { val: 100, col: [73, 0, 106, 255] }    // #49006a
+    ];
+
+    // Handle values above 100
+    if (pct >= stops[stops.length - 1].val) return stops[stops.length - 1].col;
+
+    for (let i = 0; i < stops.length - 1; i++) {
+        const lower = stops[i];
+        const upper = stops[i + 1];
+
+        if (pct >= lower.val && pct <= upper.val) {
+            // Check if there is a gap between ranges (e.g., 74 to 75)
+            // This prevents weird interpolation between the Green and Yellow ramps
+            if (upper.val - lower.val === 1 && pct > lower.val && pct < upper.val) {
+                return upper.col; 
+            }
+
+            const ratio = (pct - lower.val) / (upper.val - lower.val);
+            
+            return [
+                Math.round(lower.col[0] + (upper.col[0] - lower.col[0]) * ratio),
+                Math.round(lower.col[1] + (upper.col[1] - lower.col[1]) * ratio),
+                Math.round(lower.col[2] + (upper.col[2] - lower.col[2]) * ratio),
+                Math.round(lower.col[3] + (upper.col[3] - lower.col[3]) * ratio)
+            ];
+        }
+    }
+    
+    // Fallback for the small gaps between defined ranges (e.g., 74.5%)
+    // Returns the upper color of the nearest range
+    for (let i = 0; i < stops.length; i++) {
+        if (pct <= stops[i].val) return stops[i].col;
+    }
+}
+function colorRampStreamflow(val) {
+    val = val * 91.467
+    if (val < 0.1) return null;
+
+    // Define the hard brackets and the ramp within each bracket
+    const brackets = [
+        { min: 0,  max: 100,  start: [70, 70, 70, 255], end: [200, 200, 200, 255] }, // Gray Block
+        { min: 100,  max: 200,  start: [176, 175, 0, 255],   end: [255, 240, 0, 255] },   // Yellow Block
+        { min: 200,  max: 300,  start: [253, 168, 4, 255],  end: [253, 104, 0, 255] },  // Orange Block
+        { min: 300,  max: 600,  start: [254, 4, 0, 255],     end: [116, 3, 3, 255]},   // red Block
+        { min: 600,  max: 1000, start: [97, 0, 141, 255],     end: [205, 1, 211, 255] },     // pink Block
+        { min: 1000, max: 2000, start: [2, 0, 250, 255],  end: [0, 0, 85, 255] },  // blue Block
+        { min: 2000, max: Infinity, start: [255, 255, 255, 255], end: [255, 255, 255, 255] }    // white Block
+    ];
+
+    for (const b of brackets) {
+        if (val >= b.min && val < b.max) {
+            // Internal interpolation within the bracket only
+            const ratio = (val - b.min) / (b.max - b.min === Infinity ? 20 : b.max - b.min);
+            
+            return [
+                Math.round(b.start[0] + (b.end[0] - b.start[0]) * ratio),
+                Math.round(b.start[1] + (b.end[1] - b.start[1]) * ratio),
+                Math.round(b.start[2] + (b.end[2] - b.start[2]) * ratio),
+                Math.round(b.start[3] + (b.end[3] - b.start[3]) * ratio)
+            ];
+        }
+    }
+    
+    // Fallback for exactly 20 or higher
+    if (val >= 20) return brackets[6].start;
+    return null;
 }

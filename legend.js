@@ -86,6 +86,48 @@ const COG_CONFIG = {
             { label: '3.00"',             color: '#9955c9' },
             { label: '4.00"+ (Softball)',  color: '#ffffff' } 
         ]
+    },
+    'precip_rate': {
+        title: "PRECIP RATE (IN/HR)",
+        steps: [
+            { label: '0.01"', color: '#66ebe8' }, // Light Cyan
+            { label: '0.10"', color: '#4aa4ec' }, // Blue
+            { label: '0.25"', color: '#6ef343' }, // Light Green
+            { label: '0.50"', color: '#329d23' }, // Forest Green
+            { label: '1.00"', color: '#fbfb31' }, // Yellow
+            { label: '2.00"', color: '#e5b42e' }, // Gold/Orange
+            { label: '3.00"', color: '#e99b94' }, // Pink/Salmon
+            { label: '4.00"', color: '#d1241f' }, // Red
+            { label: '5.00"', color: '#af28b9' }, // Magenta
+            { label: '6.00"', color: '#68186e' }, // Deep Purple
+            { label: '8.00" +', color: '#ffffc2' } // Cream
+        ]
+    },
+    'reflectivity_qc': {
+        title: "COMPOSITE REFLECTIVITY (dBZ)",
+        steps: [
+            { label: '5', color: '#777777' },
+            { label: '15', color: '#4aa4ec' },
+            { label: '25', color: '#6ef343' },
+            { label: '35', color: '#329d23' },
+            { label: '45', color: '#fbfb31' },
+            { label: '55', color: '#e93228' },
+            { label: '65', color: '#e932e8' },
+            { label: '75+', color: '#9656bf' }
+        ]
+    },
+    'rala': {
+        title: "PRECIP INTENSITY (dBZ)",
+        steps: [
+            { label: '5 (Mist)', color: '#777777' },
+            { label: '15 (Very Light)', color: '#4aa4ec' },
+            { label: '25 (Light)', color: '#6ef343' },
+            { label: '35 (Moderate)', color: '#329d23' },
+            { label: '45 (Heavy)', color: '#fbfb31' },
+            { label: '55 (Intense)', color: '#e93228' },
+            { label: '65 (Extreme)', color: '#e932e8' },
+            { label: '75+ (Hail)', color: '#9656bf' }
+        ]
     }
 };
 
@@ -261,4 +303,94 @@ function colorRampExtendedQPE(inches) {
     if (inches < 16.0) return [231, 255, 255, 255]; // Above 14.0
     
     return [255, 255, 203, 255]; // Above 16.0
+}
+function colorRampPrecipRate(inHr) {
+     inHr = inHr / 25.4; 
+
+    if (inHr < 0.01) return null;
+
+    // 0.01 to 0.10 (Light Blues)
+    if (inHr < 0.05) return [102, 235, 232, 255];
+    if (inHr < 0.10) return [84, 203, 232, 255];
+
+    // 0.10 to 0.25 (Darker Blues/Teals)
+    if (inHr < 0.15) return [74, 164, 236, 255];
+    if (inHr < 0.25) return [30, 80, 238, 255];
+
+    // 0.25 to 0.50 (Bright Greens)
+    if (inHr < 0.40) return [110, 243, 67, 255];
+    if (inHr < 0.50) return [76, 212, 53, 255];
+
+    // 0.50 to 1.00 (Forest Greens)
+    if (inHr < 0.60) return [56, 178, 41, 255];
+    if (inHr < 0.80) return [50, 157, 35, 255];
+    if (inHr < 1.00) return [45, 143, 31, 255];
+
+    // 1.00 to 2.00 (Yellows to Amber)
+    if (inHr < 1.25) return [251, 251, 49, 255];
+    if (inHr < 1.50) return [244, 211, 48, 255];
+    if (inHr < 1.75) return [229, 180, 46, 255];
+    if (inHr < 2.00) return [198, 134, 38, 255];
+
+    // 2.00 to 3.00 (Oranges to Tan)
+    if (inHr < 2.50) return [233, 155, 148, 255];
+    if (inHr < 3.00) return [229, 81, 71, 255];
+
+    // 3.00 to 4.00 (Reds)
+    if (inHr < 3.50) return [209, 36, 31, 255];
+    if (inHr < 4.00) return [167, 30, 24, 255];
+
+    // 4.00 to 5.00 (Deep Red/Start of Magenta)
+    if (inHr < 4.50) return [125, 25, 20, 255]; // Deep Red transition
+    if (inHr < 5.00) return [175, 40, 185, 255]; // Dark Magenta
+
+    // 5.00+ (Purples and up)
+    if (inHr < 6.00) return [143, 33, 151, 255];
+    if (inHr < 7.00) return [104, 24, 110, 255];
+    if (inHr < 8.00) return [255, 255, 255, 255];
+    
+    return [255, 255, 194, 255]; // Extreme
+}
+function colorRampReflectivity(dbz) {
+    if (dbz < 5) return null;
+
+    const stops = [
+        { val: 5,  col: [119, 119, 119, 255] }, // Gray
+        { val: 10, col: [102, 235, 232, 255] }, // Cyan
+        { val: 15, col: [74, 164, 236, 255] },  // Sky Blue
+        { val: 20, col: [0, 0, 255, 255] },     // Deep Blue
+        { val: 25, col: [110, 243, 67, 255] },  // Bright Green
+        { val: 30, col: [76, 212, 53, 255] },   // Mid Green
+        { val: 35, col: [50, 157, 35, 255] },   // Forest Green
+        { val: 40, col: [251, 251, 49, 255] },  // Yellow
+        { val: 45, col: [229, 180, 46, 255] },  // Gold
+        { val: 50, col: [243, 146, 45, 255] },  // Orange
+        { val: 55, col: [233, 50, 40, 255] },   // Red
+        { val: 65, col: [167, 30, 24, 255] },   // Deep Red
+        { val: 70, col: [233, 50, 232, 255] },  // Magenta
+        { val: 75, col: [175, 40, 185, 255] },  // Deep Purple
+        { val: 80, col: [150, 86, 191, 255] }   // Lavender
+    ];
+
+    // Handle values above the highest stop
+    if (dbz >= stops[stops.length - 1].val) return stops[stops.length - 1].col;
+
+    // Find the two stops to interpolate between
+    for (let i = 0; i < stops.length - 1; i++) {
+        const lower = stops[i];
+        const upper = stops[i + 1];
+
+        if (dbz >= lower.val && dbz <= upper.val) {
+            // Calculate interpolation factor (0.0 to 1.0)
+            const ratio = (dbz - lower.val) / (upper.val - lower.val);
+            
+            // Interpolate each channel: color = start + (end - start) * ratio
+            return [
+                Math.round(lower.col[0] + (upper.col[0] - lower.col[0]) * ratio),
+                Math.round(lower.col[1] + (upper.col[1] - lower.col[1]) * ratio),
+                Math.round(lower.col[2] + (upper.col[2] - lower.col[2]) * ratio),
+                Math.round(lower.col[3] + (upper.col[3] - lower.col[3]) * ratio)
+            ];
+        }
+    }
 }

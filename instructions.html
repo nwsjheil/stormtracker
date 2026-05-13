@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather Alert Tool — User Guide | NWS Melbourne</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Barlow+Condensed:wght@400;600;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #001c2b;
+    --deep: #002c45;
+    --mid: #003d5c;
+    --accent: #a9e7ff;
+    --accent2: #38bdf8;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --green: #4ade80;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: rgba(169,231,255,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--navy);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  /* ── COVER ── */
+  .cover {
+    background: linear-gradient(160deg, #001018 0%, #002c45 50%, #001c2b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 72px 60px 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 80% 40%, rgba(56,189,248,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(169,231,255,0.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .cover-grid {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 40px;
+    max-width: 960px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+  .cover-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cover-badge::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 2px;
+    background: var(--accent2);
+  }
+  .cover-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 58px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: -1px;
+    margin-bottom: 6px;
+  }
+  .cover-title span { color: var(--accent); }
+  .cover-sub {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 28px;
+  }
+  .cover-desc {
+    color: #94a3b8;
+    max-width: 520px;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .cover-radar {
+    flex-shrink: 0;
+    width: 180px;
+    height: 180px;
+    position: relative;
+  }
+  .radar-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse-ring 3s ease-in-out infinite;
+  }
+  .radar-ring:nth-child(1) { width: 180px; height: 180px; border-color: rgba(169,231,255,0.15); animation-delay: 0s; }
+  .radar-ring:nth-child(2) { width: 130px; height: 130px; border-color: rgba(169,231,255,0.25); animation-delay: 0.5s; }
+  .radar-ring:nth-child(3) { width: 80px; height: 80px; border-color: rgba(169,231,255,0.4); animation-delay: 1s; }
+  .radar-dot {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 20px var(--accent), 0 0 40px rgba(169,231,255,0.4);
+  }
+  .radar-sweep {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50%; height: 1px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    transform-origin: left center;
+    animation: sweep 4s linear infinite;
+    opacity: 0.6;
+  }
+  @keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes pulse-ring { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+  /* ── NAV TOC ── */
+  .toc {
+    background: rgba(0,44,69,0.6);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 60px;
+  }
+  .toc-inner {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .toc-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 6px;
+  }
+  .toc-link {
+    color: var(--accent2);
+    text-decoration: none;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    transition: color 0.15s;
+  }
+  .toc-link:hover { color: var(--accent); }
+  .toc-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+  }
+
+  /* ── CONTENT ── */
+  .content {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 60px;
+  }
+
+  /* ── SECTION ── */
+  .section {
+    margin-bottom: 72px;
+    padding-top: 8px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 1px;
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #fff;
+  }
+  .section-icon {
+    margin-left: auto;
+    font-size: 24px;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin: 32px 0 12px;
+  }
+
+  p { margin-bottom: 14px; color: #cbd5e1; }
+
+  /* ── KEY BUTTON CHIP ── */
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mid);
+    border: 1px solid rgba(169,231,255,0.3);
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  /* ── UI BUTTON CHIP ── */
+  .btn-chip {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(15,23,42,0.8);
+    border: 1px solid rgba(169,231,255,0.25);
+    border-radius: 8px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #cbd5e1;
+    letter-spacing: 0.5px;
+    font-family: 'Barlow Condensed', sans-serif;
+    white-space: nowrap;
+  }
+  .btn-chip.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+
+  /* ── CALLOUT BOXES ── */
+  .callout {
+    background: rgba(0,44,69,0.5);
+    border-left: 3px solid var(--accent2);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 14px;
+    color: #94a3b8;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.tip { border-left-color: var(--green); }
+  .callout strong { color: var(--text); }
+
+  /* ── MODE CARDS ── */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .mode-card {
+    background: rgba(0,44,69,0.4);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .mode-card:hover { border-color: rgba(169,231,255,0.35); }
+  .mode-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .mode-tag {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: rgba(15,23,42,0.8);
+    border: 1px solid rgba(169,231,255,0.25);
+    border-radius: 6px;
+    padding: 3px 10px;
+    color: #cbd5e1;
+  }
+  .mode-key {
+    margin-left: auto;
+  }
+  .mode-card h4 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .mode-card p { font-size: 13.5px; margin: 0; color: #94a3b8; }
+
+  /* ── STEP LIST ── */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    margin: 16px 0;
+  }
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #94a3b8;
+    font-size: 14.5px;
+  }
+  .steps li:last-child { border: none; }
+  .steps li::before {
+    content: counter(step);
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    background: var(--mid);
+    border: 1px solid var(--accent2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent2);
+    margin-top: 1px;
+  }
+  .steps li strong { color: var(--text); }
+
+  /* ── DATA TABLE ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  .data-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .data-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #94a3b8;
+    vertical-align: top;
+  }
+  .data-table td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+  .data-table tr:last-child td { border: none; }
+
+  /* ── HOTKEY TABLE ── */
+  .hotkey-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .hotkey-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0,44,69,0.4);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    color: #94a3b8;
+  }
+  .hotkey-row kbd { flex-shrink: 0; min-width: 32px; }
+
+  /* ── WARNING COLOR BADGES ── */
+  .warn-color {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: 5px;
+  }
+
+  /* ── WORKFLOW STRIP ── */
+  .workflow {
+    display: flex;
+    gap: 0;
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+  .workflow-step {
+    background: rgba(0,44,69,0.5);
+    border: 1px solid var(--border);
+    border-right: none;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: #94a3b8;
+    position: relative;
+    min-width: 150px;
+    flex: 1;
+  }
+  .workflow-step:first-child { border-radius: 10px 0 0 10px; }
+  .workflow-step:last-child { border-right: 1px solid var(--border); border-radius: 0 10px 10px 0; }
+  .workflow-step-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--accent2);
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+  }
+  .workflow-step strong { display: block; color: var(--text); font-size: 13px; margin-bottom: 3px; }
+
+  /* ── FOOTER ── */
+  footer {
+    background: rgba(0,28,43,0.8);
+    border-top: 1px solid var(--border);
+    padding: 28px 60px;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  @media (max-width: 700px) {
+    .cover { padding: 40px 24px; }
+    .cover-grid { flex-direction: column; }
+    .cover-radar { display: none; }
+    .content { padding: 40px 24px; }
+    .toc { padding: 20px 24px; }
+    footer { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ COVER ══════════════════ -->
+<div class="cover">
+  <div class="cover-grid">
+    <div>
+      <div class="cover-badge">NWS Melbourne · Internal Operations Tool</div>
+      <div class="cover-title">Weather<br><span>Alert Tool</span></div>
+      <div class="cover-sub">Storm Tracker & Impact Visualizer</div>
+      <p class="cover-desc">A real-time map-based tool for building storm tracks, visualizing radar and satellite data, overlaying NWS warnings, annotating roads, and exporting broadcast-ready graphics.</p>
+    </div>
+    <div class="cover-radar">
+      <div class="radar-ring"></div>
+      <div class="radar-ring"></div>
+      <div class="radar-ring"></div>
+      <div class="radar-sweep"></div>
+      <div class="radar-dot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ TOC ══════════════════ -->
+<nav class="toc">
+  <div class="toc-inner">
+    <div class="toc-label">Contents</div>
+    <div class="toc-grid">
+      <a href="#overview" class="toc-link"><span class="toc-num">01</span> Overview</a>
+      <a href="#interface" class="toc-link"><span class="toc-num">02</span> Interface Layout</a>
+      <a href="#modes" class="toc-link"><span class="toc-num">03</span> Toolbar Modes</a>
+      <a href="#data" class="toc-link"><span class="toc-num">04</span> Data Layers</a>
+      <a href="#tracking" class="toc-link"><span class="toc-num">05</span> Storm Tracking</a>
+      <a href="#annotations" class="toc-link"><span class="toc-num">06</span> Annotations</a>
+      <a href="#warnings" class="toc-link"><span class="toc-num">07</span> NWS Warnings</a>
+      <a href="#export" class="toc-link"><span class="toc-num">08</span> Export</a>
+      <a href="#hotkeys" class="toc-link"><span class="toc-num">09</span> Keyboard Shortcuts</a>
+      <a href="#tips" class="toc-link"><span class="toc-num">10</span> Tips & Workflow</a>
+    </div>
+  </div>
+</nav>
+
+<div class="content">
+
+<!-- ══════════════════ 01 OVERVIEW ══════════════════ -->
+<section class="section" id="overview">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2 class="section-title">Overview</h2>
+    <span class="section-icon">🌩️</span>
+  </div>
+  <p>The <strong>Weather Alert Tool</strong> is an internal NWS Melbourne browser-based application for building, visualizing, and exporting storm impact graphics in real time. It combines live radar and satellite imagery, NWS warning polygons, interactive storm tracking, and freehand annotation into a single map interface built for operational use during severe weather events.</p>
+  <p>The tool is designed to be used on a desktop or laptop browser (best experienced full-screen). It does not require login and is intended for internal forecasters and media liaisons.</p>
+
+  <div class="callout tip">
+    <strong>Quick start:</strong> Open the tool, select a data layer from the DATA dropdown, and press <kbd>D</kbd> to start drawing or <kbd>C</kbd> to enter Cone tracking mode. Press <kbd>E</kbd> to export when ready.
+  </div>
+</section>
+
+<!-- ══════════════════ 02 INTERFACE ══════════════════ -->
+<section class="section" id="interface">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2 class="section-title">Interface Layout</h2>
+    <span class="section-icon">🗺️</span>
+  </div>
+  <p>The interface is built around a full-screen map. All controls are overlaid on top of the map canvas and will dim after 7 seconds of inactivity — hover over any control to restore it to full brightness.</p>
+
+  <h3>Toolbar (Top-Left)</h3>
+  <p>The primary toolbar contains two rows of grouped buttons:</p>
+  <ul style="list-style:none; margin-bottom:16px;">
+    <li style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">Row 1 — Mode Controls:</strong> PAN, HOME 🏠, CONE, TRACK, DRAW, SPOT, ID ROADS, ERASE, TEXT, EXPORT, HELP</li>
+    <li style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">Row 2 — Context Controls:</strong> DATA selector, Opacity (◐), Duration (30m / 1h / 2h), Fan width slider, CLEAR TRACK, WARNINGS, ⚡ Lightning</li>
+  </ul>
+
+  <h3>Help Hint (Top-Right)</h3>
+  <p>A small panel in the top-right corner dynamically shows instructions for the currently active mode. Watch this to confirm you're in the correct mode.</p>
+
+  <h3>Storm Impact Card (Bottom-Left)</h3>
+  <p>When a storm track is active, a draggable card appears showing the computed storm speed in MPH and a list of cities within the projected impact path. Each city row includes the estimated time of arrival (ETA). You can hover over a city row to reveal a remove button, excluding it from the impact list.</p>
+
+  <h3>Data Legend (Bottom-Right)</h3>
+  <p>When a COG or MRMS product is selected (such as QPE or Hail Size), a color legend appears in the bottom-right corner identifying the data thresholds.</p>
+</section>
+
+<!-- ══════════════════ 03 MODES ══════════════════ -->
+<section class="section" id="modes">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2 class="section-title">Toolbar Modes</h2>
+    <span class="section-icon">🎛️</span>
+  </div>
+  <p>The tool operates in one mode at a time. The active mode is highlighted in the toolbar. Press <kbd>Esc</kbd> at any time to return to Pan mode.</p>
+
+  <div class="mode-grid">
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">PAN</span>
+        <span class="mode-key"><kbd>P</kbd></span>
+      </div>
+      <h4>Pan Mode</h4>
+      <p>Default navigation mode. Click and drag to move the map. Scroll to zoom in and out. No drawing or tracking is active.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">🏠</span>
+      </div>
+      <h4>Home Button</h4>
+      <p>Instantly flies the map back to the default view centered on Central Florida (28.5°N, 81.4°W) at zoom level 7, and returns to Pan mode.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">CONE</span>
+        <span class="mode-key"><kbd>C</kbd></span>
+      </div>
+      <h4>Cone Mode</h4>
+      <p>Click and drag from the storm's current location toward its projected end point. A cone of uncertainty polygon is drawn with a centerline and tick marks. The Storm Impact Card shows computed speed and city ETAs. Fan width is adjustable via the FAN slider. Releases to Pan mode automatically.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">TRACK</span>
+        <span class="mode-key"><kbd>L</kbd></span>
+      </div>
+      <h4>Manual Track Mode</h4>
+      <p>A two-step tracker: <strong>Step 1</strong> — click and drag to draw the leading edge of the storm cell. <strong>Step 2</strong> — release, then move the mouse to project the track box forward in real time. <strong>Step 3</strong> — click anywhere to lock the projection into place. Click again to unlock and return to Pan.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">DRAW</span>
+        <span class="mode-key"><kbd>D</kbd></span>
+      </div>
+      <h4>Draw Mode</h4>
+      <p>Freehand annotation tool. Click and drag to draw smooth, Bezier-curved lines on the map in the selected color and width. Multiple strokes accumulate — use ERASE (<kbd>Shift+C</kbd>) to clear all drawings at once.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">SPOT</span>
+        <span class="mode-key"><kbd>S</kbd></span>
+      </div>
+      <h4>Spotlight Mode</h4>
+      <p>Click and drag to draw a closed shape around an area of interest. The rest of the map is dimmed with a semi-transparent black overlay, focusing attention on the highlighted area. Useful for directing attention to a specific county or storm cell.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">ID ROADS</span>
+        <span class="mode-key"><kbd>R</kbd></span>
+      </div>
+      <h4>Road ID Mode</h4>
+      <p>Click on any major road to stamp a persistent label at that location showing the road name (e.g. I-4, US-1, FL TPKE). Hover to preview the name before clicking. Labels accumulate until cleared with ERASE. Florida-specific road aliases are applied automatically.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">TEXT</span>
+        <span class="mode-key"><kbd>T</kbd></span>
+      </div>
+      <h4>Text Box</h4>
+      <p>Opens a draggable, editable text box on the map. Supports bold, italic, text color, background color, font size (Small → Huge), and alignment (Left / Center / Right). Drag the handle bar to reposition. Close with the red X button.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">ERASE</span>
+        <span class="mode-key"><kbd>Shift+C</kbd></span>
+      </div>
+      <h4>Erase All</h4>
+      <p>Immediately clears all freehand drawings, spotlight overlays, road ID labels, and data sample stamps from the map. Does not remove the storm track — use CLEAR TRACK for that.</p>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-card-header">
+        <span class="mode-tag">CLEAR TRACK</span>
+        <span class="mode-key"><kbd>C</kbd></span>
+      </div>
+      <h4>Clear Track</h4>
+      <p>Removes the active storm track polygon, centerline, tick marks, ETA labels, and the Storm Impact Card. Resets to Pan mode. Note: this does not clear freehand drawings — use ERASE for those.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Note on Shift+C vs C:</strong> Pressing <kbd>C</kbd> alone clears the active storm track. Pressing <kbd>Shift+C</kbd> clears all freehand drawings and annotations. These are two separate operations.
+  </div>
+</section>
+
+<!-- ══════════════════ 04 DATA LAYERS ══════════════════ -->
+<section class="section" id="data">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2 class="section-title">Data Layers</h2>
+    <span class="section-icon">📡</span>
+  </div>
+  <p>Use the <span class="btn-chip">DATA ▾</span> dropdown in Row 2 to select the active data product displayed over the map. Products are organized into groups:</p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Group</th>
+        <th>Option</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>—</td><td>BLANK</td><td>No data overlay — base map only.</td></tr>
+      <tr><td>National</td><td>MRMS</td><td>CONUS-wide MRMS base reflectivity composite (national overview).</td></tr>
+      <tr><td>Regional</td><td>BREF</td><td>Regional base reflectivity COG product (RALA).</td></tr>
+      <tr><td>Regional</td><td>COMP</td><td>Regional quality-controlled composite reflectivity COG.</td></tr>
+      <tr><td>NEXRAD</td><td>MLB REF / VEL</td><td>Melbourne WSR-88D super-resolution base reflectivity or velocity.</td></tr>
+      <tr><td>NEXRAD</td><td>TBW / JAX / MIA</td><td>Tampa Bay, Jacksonville, and Miami NEXRAD base reflectivity.</td></tr>
+      <tr><td>TDWR</td><td>MCO / MCO LR / PBI LR / FLL / TPA</td><td>Terminal Doppler Weather Radar products for Orlando, Palm Beach, Fort Lauderdale, and Tampa airports.</td></tr>
+      <tr><td>MRMS</td><td>P-RATE</td><td>Instantaneous precipitation rate in inches per hour.</td></tr>
+      <tr><td>MRMS</td><td>1H / 3H / 6H / 12H / 24H QPE</td><td>Multi-period quantitative precipitation estimates (accumulation in inches).</td></tr>
+      <tr><td>MRMS</td><td>Hail Size</td><td>Maximum Expected Size of Hail (MESH) in inches.</td></tr>
+      <tr><td>Satellite</td><td>VIS</td><td>GOES visible imagery (daytime only).</td></tr>
+      <tr><td>Satellite</td><td>IR</td><td>GOES longwave infrared (cloud-top temperatures, day/night).</td></tr>
+      <tr><td>Satellite</td><td>WV</td><td>GOES water vapor imagery.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Opacity Control</h3>
+  <p>Click the <strong>◐</strong> icon next to the DATA selector to open a mini panel. The opacity slider controls transparency for all active data layers simultaneously. Default is 90%. Useful for balancing radar visibility against the base map when presenting.</p>
+
+  <h3>Data Threshold Filter</h3>
+  <p>When a COG product is active (MRMS, QPE, MESH), a <strong>Data Threshold</strong> slider appears inside the opacity panel. Slide it to filter out values below a given threshold — helpful for suppressing light rain noise when focusing on heavy rainfall or hail cores.</p>
+
+  <h3>Data Sampling (Eyedropper)</h3>
+  <p>When a COG or MRMS product is loaded, a <strong>💧</strong> eyedropper icon appears in the DATA group. Click it to activate sample mode, then click anywhere on the data overlay to stamp the measured value at that point (reflectivity in dBZ, precipitation in inches, hail size in inches). Samples persist until cleared with ERASE.</p>
+
+  <h3>Lightning Overlay</h3>
+  <p>Click the <span class="btn-chip">⚡</span> button to toggle real-time lightning strike data. When active, bolt icons appear on the map and the data refreshes automatically every 60 seconds. Lightning data is sourced from jhwxtools.com/mrms.</p>
+
+  <div class="callout">
+    <strong>Auto-refresh:</strong> NWS warning polygons update automatically every 2 minutes. Lightning data refreshes every 60 seconds when the lightning layer is active.
+  </div>
+</section>
+
+<!-- ══════════════════ 05 STORM TRACKING ══════════════════ -->
+<section class="section" id="tracking">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2 class="section-title">Storm Tracking</h2>
+    <span class="section-icon">🌀</span>
+  </div>
+
+  <h3>Duration Selection</h3>
+  <p>Before drawing a track, select a forecast duration using the <span class="btn-chip">30m</span> <span class="btn-chip active">1h</span> <span class="btn-chip">2h</span> buttons that appear in Row 2 when Cone or Track mode is active. This determines how far forward the track is projected. Default is 1 hour.</p>
+
+  <h3>Cone Mode — Step by Step</h3>
+  <ol class="steps">
+    <li>Select a data layer so the storm is visible.</li>
+    <li>Press <kbd>C</kbd> or click <span class="btn-chip">CONE</span> to enter Cone mode.</li>
+    <li>Choose the forecast duration (30m, 1h, or 2h).</li>
+    <li>Optionally adjust the <strong>FAN</strong> slider to set cone width (20–50°).</li>
+    <li><strong>Click on the storm's current location</strong> and hold the mouse button down.</li>
+    <li><strong>Drag toward the projected end point.</strong> The cone, centerline, and speed display update in real time as you drag.</li>
+    <li>Release the mouse. The tool automatically returns to Pan mode. The Storm Impact Card appears showing city ETAs.</li>
+  </ol>
+
+  <h3>Manual Track Mode — Step by Step</h3>
+  <ol class="steps">
+    <li>Press <kbd>L</kbd> or click <span class="btn-chip">TRACK</span> to enter Manual Track mode.</li>
+    <li>Choose the forecast duration (30m, 1h, or 2h).</li>
+    <li><strong>Click and drag to draw the leading edge</strong> of the storm. This is the front line of the storm cell — draw it perpendicular to the storm's direction of motion.</li>
+    <li>Release the mouse. The edge is now locked.</li>
+    <li><strong>Move the mouse away from the edge</strong> in the direction of storm motion. A track box and projection automatically follow your cursor, showing speed and ETAs live.</li>
+    <li><strong>Click to lock the projection</strong> in place. The track is finalized and the tool returns to Pan mode.</li>
+    <li>Click anywhere on the map to unlock and reset.</li>
+  </ol>
+
+  <h3>Storm Impact Card</h3>
+  <p>Once a track is drawn, the Storm Impact Card appears in the lower-left corner. It shows:</p>
+  <ul style="list-style:none; margin-bottom:16px;">
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">Storm Speed</strong> — Computed from the drag distance and selected duration, displayed in MPH.</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">City Impact List</strong> — Cities within the projected impact area, sorted by ETA. Hover to reveal a Remove button to exclude a city from the list.</li>
+  </ul>
+  <p>The card can be dragged anywhere on the screen by its header handle. It is automatically hidden during export.</p>
+
+  <h3>ETA Tick Marks</h3>
+  <p>Time tick marks are drawn along the centerline at regular intervals based on storm speed. These show how long it will take the storm to reach each point along the track. Tick mark spacing adjusts dynamically when you zoom the map.</p>
+
+  <div class="callout warn">
+    <strong>Starting a new track:</strong> Beginning a new drag in Cone or Track mode will automatically clear the previous track. You do not need to press Clear Track first.
+  </div>
+</section>
+
+<!-- ══════════════════ 06 ANNOTATIONS ══════════════════ -->
+<section class="section" id="annotations">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2 class="section-title">Annotations</h2>
+    <span class="section-icon">✏️</span>
+  </div>
+
+  <h3>Freehand Drawing</h3>
+  <p>Press <kbd>D</kbd> or click <span class="btn-chip">DRAW</span>. Click and drag to draw smooth freehand lines. Strokes are Bezier-smoothed on release. Each stroke is a separate object — multiple strokes accumulate on the map until you use ERASE.</p>
+  <p>The default draw color is yellow. To change color, you currently need to use the draw color variable in the source. Width defaults to 6px.</p>
+
+  <h3>Spotlight Overlay</h3>
+  <p>Press <kbd>S</kbd> or click <span class="btn-chip">SPOT</span>. Click and drag to draw a closed freehand boundary around the area you want to highlight. When you release, everything outside the boundary is darkened by a semi-transparent black overlay, drawing the viewer's eye to the interior region. Use it to focus attention on a specific county or cell during a briefing.</p>
+
+  <h3>Road ID Labels</h3>
+  <p>Press <kbd>R</kbd> or click <span class="btn-chip">ID ROADS</span>. Hover over major roads — a yellow tooltip previews the road name. Click to stamp a persistent label at that location. Florida-specific aliases are applied automatically (e.g. FL-5 becomes US-1, FL-91 becomes FL TPKE). Labels persist until ERASE is used.</p>
+
+  <h3>Text Box</h3>
+  <p>Press <kbd>T</kbd> or click <span class="btn-chip">TEXT</span> to open a floating, editable text panel. You can:</p>
+  <ul style="list-style:none; margin-bottom:12px;">
+    <li style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">Type or paste any text into the editable area.</li>
+    <li style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">Change <strong style="color:#e2e8f0">text color</strong> and <strong style="color:#e2e8f0">background color</strong> via the color pickers.</li>
+    <li style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">Set <strong style="color:#e2e8f0">font size</strong>: Small, Normal, Large, X-Large, or Huge.</li>
+    <li style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">Apply <strong style="color:#e2e8f0">alignment</strong>: Left (L), Center (C), Right (R).</li>
+    <li style="padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">Toggle <strong style="color:#e2e8f0">Bold (B)</strong> or <strong style="color:#e2e8f0">Italic (I)</strong>.</li>
+    <li style="padding:6px 0; color:#94a3b8; font-size:14px;">Drag the handle bar at the top to reposition the box. Close with the red <strong style="color:#e2e8f0">X</strong> button.</li>
+  </ul>
+  <div class="callout">
+    <strong>Tip:</strong> The text box is ideal for adding event titles, timestamps, or area descriptions to your exported graphic.
+  </div>
+
+  <h3>Clearing Annotations</h3>
+  <p>Press <kbd>Shift+C</kbd> or click <span class="btn-chip">ERASE</span> to clear all freehand drawings, spotlights, road ID labels, and data sample stamps at once. The storm track is unaffected — use CLEAR TRACK (<kbd>C</kbd>) for that.</p>
+</section>
+
+<!-- ══════════════════ 07 NWS WARNINGS ══════════════════ -->
+<section class="section" id="warnings">
+  <div class="section-header">
+    <span class="section-num">07</span>
+    <h2 class="section-title">NWS Warnings</h2>
+    <span class="section-icon">🚨</span>
+  </div>
+  <p>Press <kbd>W</kbd> or click <span class="btn-chip">WARNINGS</span> to toggle the active NWS warning polygon layer. Warning polygons are color-coded by hazard type and refresh automatically every 2 minutes.</p>
+
+  <h3>Warning Color Key</h3>
+  <table class="data-table">
+    <thead>
+      <tr><th>Color</th><th>Warning Type</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="warn-color" style="background:#FF0000;"></span> Red</td><td>Tornado Warning</td></tr>
+      <tr><td><span class="warn-color" style="background:#FFFF00; border:1px solid rgba(255,255,255,0.2);"></span> Yellow</td><td>Severe Thunderstorm Warning</td></tr>
+      <tr><td><span class="warn-color" style="background:#00FF00;"></span> Green</td><td>Flash Flood Warning</td></tr>
+      <tr><td><span class="warn-color" style="background:#4ade80;"></span> Light Green</td><td>Flood Advisory</td></tr>
+      <tr><td><span class="warn-color" style="background:#FFA500;"></span> Orange</td><td>Special Marine Warning</td></tr>
+      <tr><td><span class="warn-color" style="background:#D2B48C;"></span> Tan</td><td>Special Weather Statement</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Clicking a Warning Polygon</h3>
+  <ol class="steps">
+    <li>With warnings visible, click on any colored warning polygon.</li>
+    <li>The map auto-fits to the warning's bounding box (if zoomed out).</li>
+    <li>The selected warning is highlighted at full opacity; all others dim.</li>
+    <li>A popup appears showing the warning type, expiration time, hazard details (wind speed, hail size, tornado, water rescues), motion direction and speed, and affected area description.</li>
+    <li>Click the map background to dismiss the popup and reset highlighting.</li>
+  </ol>
+
+  <h3>Warning Popup Features</h3>
+  <ul style="list-style:none; margin-bottom:12px;">
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Editable fields</strong> — Click on any text in the popup (event name, expiration, hazards, affected area) to edit it inline before exporting.</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Hail descriptions</strong> — Hail size is automatically translated to a size reference (e.g. "1.75 in (Golf Ball)").</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Motion</strong> — Storm motion is parsed from the NWS warning data and displayed as cardinal direction and rounded MPH.</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Draggable</strong> — The popup can be dragged by its header to reposition it anywhere on screen.</li>
+    <li style="padding:7px 0; color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Ignore</strong> — Each popup includes an Ignore button to permanently hide that warning from display for the current session.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Storm track interaction:</strong> When a storm track is active, warning polygons dim to 20% opacity so the track is visible. The selected (clicked) warning always shows at full opacity regardless.
+  </div>
+</section>
+
+<!-- ══════════════════ 08 EXPORT ══════════════════ -->
+<section class="section" id="export">
+  <div class="section-header">
+    <span class="section-num">08</span>
+    <h2 class="section-title">Export</h2>
+    <span class="section-icon">📤</span>
+  </div>
+  <p>The export system captures the current map view as a 16:9 broadcast-ready graphic (1350×759 px) with an NWS Melbourne branded banner.</p>
+
+  <div class="workflow">
+    <div class="workflow-step">
+      <div class="workflow-step-num">STEP 01</div>
+      <strong>Set up your map</strong>
+      Pan, zoom, and layer your data before exporting.
+    </div>
+    <div class="workflow-step">
+      <div class="workflow-step-num">STEP 02</div>
+      <strong>Press Export</strong>
+      Press <kbd>E</kbd> or click <span class="btn-chip">EXPORT</span>.
+    </div>
+    <div class="workflow-step">
+      <div class="workflow-step-num">STEP 03</div>
+      <strong>Frame the shot</strong>
+      The viewfinder overlay appears. Pan and zoom to position the content inside the frame.
+    </div>
+    <div class="workflow-step">
+      <div class="workflow-step-num">STEP 04</div>
+      <strong>Confirm or cancel</strong>
+      Press <kbd>Enter</kbd> or click <span class="btn-chip active">EXPORT NOW & COPY</span>. Press <kbd>Esc</kbd> or click Cancel to exit without exporting.
+    </div>
+  </div>
+
+  <h3>What Gets Captured</h3>
+  <ul style="list-style:none; margin-bottom:16px;">
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">The map view within the blue viewfinder border (1350×639 px map area).</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">All active data layers, storm tracks, freehand drawings, spotlight overlays, road labels, and data samples.</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">A 120px header banner reading <strong style="color:#e2e8f0;">WEATHER IMPACT · UPDATE</strong> with a timestamp and the NWS Melbourne WFO logo.</li>
+  </ul>
+
+  <h3>What Is Hidden During Export</h3>
+  <ul style="list-style:none; margin-bottom:16px;">
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;">The toolbar and all UI controls.</li>
+    <li style="padding:7px 0; color:#94a3b8; font-size:14px;">The Storm Impact Card (city list). Plan to communicate impact separately or include a custom text box on the map.</li>
+  </ul>
+
+  <h3>After Export</h3>
+  <p>The graphic is rendered and automatically copied to your clipboard as a PNG image. Paste it directly into Slack, email, or any social media tool. The tool stays open and all annotations remain intact after export.</p>
+
+  <div class="callout tip">
+    <strong>Best practice:</strong> Add key details (storm name, time, affected areas) using the TEXT tool before exporting. Position the text box inside the viewfinder frame for it to appear in the final image.
+  </div>
+</section>
+
+<!-- ══════════════════ 09 HOTKEYS ══════════════════ -->
+<section class="section" id="hotkeys">
+  <div class="section-header">
+    <span class="section-num">09</span>
+    <h2 class="section-title">Keyboard Shortcuts</h2>
+    <span class="section-icon">⌨️</span>
+  </div>
+  <p>All hotkeys are disabled when the cursor is inside an input field or an editable text area.</p>
+  <div class="hotkey-grid">
+    <div class="hotkey-row"><kbd>P</kbd> Pan mode</div>
+    <div class="hotkey-row"><kbd>C</kbd> Cone mode / Clear track</div>
+    <div class="hotkey-row"><kbd>L</kbd> Manual track mode</div>
+    <div class="hotkey-row"><kbd>D</kbd> Draw mode</div>
+    <div class="hotkey-row"><kbd>S</kbd> Spotlight mode</div>
+    <div class="hotkey-row"><kbd>T</kbd> Open text box</div>
+    <div class="hotkey-row"><kbd>W</kbd> Toggle warnings</div>
+    <div class="hotkey-row"><kbd>R</kbd> Toggle Road ID mode</div>
+    <div class="hotkey-row"><kbd>E</kbd> Open export viewfinder</div>
+    <div class="hotkey-row"><kbd>Shift</kbd>+<kbd>C</kbd> Erase all drawings</div>
+    <div class="hotkey-row"><kbd>Esc</kbd> Return to Pan / Exit export</div>
+    <div class="hotkey-row"><kbd>Enter</kbd> Confirm export (in viewfinder)</div>
+  </div>
+</section>
+
+<!-- ══════════════════ 10 TIPS ══════════════════ -->
+<section class="section" id="tips">
+  <div class="section-header">
+    <span class="section-num">10</span>
+    <h2 class="section-title">Tips & Recommended Workflow</h2>
+    <span class="section-icon">💡</span>
+  </div>
+
+  <h3>Recommended Severe Weather Briefing Workflow</h3>
+  <ol class="steps">
+    <li><strong>Select radar product.</strong> Pick MLB REF for a single-site view, or MRMS for the full Florida picture. Adjust opacity to ~80% for legibility.</li>
+    <li><strong>Annotate key roads.</strong> Press <kbd>R</kbd> and click on at-risk corridors to stamp persistent road labels.</li>
+    <li><strong>Annotate values (if MRMS).</strong> Press 💧 and click to sample QPE, hail, or reflectivity values.</li>
+    <li><strong>Enable warnings.</strong> Press <kbd>W</kbd> to toggle warning polygons on. Click a polygon to see its full details and motion data.</li>
+    <li><strong>Draw the storm track.</strong> Use <span class="btn-chip">CONE</span> for a standard forecast cone or <span class="btn-chip">TRACK</span> for a precise linear storm box. Select an appropriate duration first.</li>
+    <li><strong>Add spotlight if needed.</strong> Press <kbd>S</kbd> and draw around the county of concern to focus viewer attention.</li>
+    <li><strong>Add a text callout.</strong> Press <kbd>T</kbd> to open a text box for storm title, time, or impacted area summary.</li>
+    <li><strong>Export.</strong> Press <kbd>E</kbd>, frame the shot, and press <kbd>Enter</kbd> to copy to clipboard.</li>
+  </ol>
+
+  <h3>General Tips</h3>
+  <div class="callout tip">
+    <strong>Annotating:</strong> You can draw annotations with DRAW mode on top of a cone to highlight specific areas, roads, or cities within the impact corridor.
+  </div>
+    <strong>Clicking On Items:</strong> Your highlighted warning may get cleared if trying to add roads or sample values. If that occurs, turn off the sample/ID features, click outside of a warning, then click the warning of interest again.
+  </div>  
+  <div class="callout tip">
+    <strong>Sampling QPE:</strong> Switch to a QPE product, activate the eyedropper (💧), and click on flooded areas to stamp rainfall totals directly on the map before exporting.
+  </div>
+  <div class="callout">
+    <strong>Toolbar fades:</strong> The toolbar dims after 7 seconds. Simply hover over it to bring it back to full brightness — this keeps your map view clean during screen shares.
+  </div>
+  <div class="callout warn">
+    <strong>Annotations are not saved.</strong> All drawings, tracks, labels, and text are held in memory only. Closing or refreshing the browser will clear everything. Export before closing.
+  </div>
+</section>
+
+</div><!-- /content -->
+
+<footer>
+  NWS Melbourne · Weather Alert Tool · Internal User Guide · For operational use only
+</footer>
+
+</body>
+</html>

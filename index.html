@@ -629,8 +629,8 @@ body{
         <option value="conus|conus_bref_qcd">Mosaic</option>
     </optgroup>
                     <optgroup label="REGIONAL">
-        <option value="cog|rala">BREF</option>
-        <option value="cog|reflectivity_qc">COMP</option>
+        <option value="cog|rala">MRMS BREF</option>
+        <option value="cog|reflectivity_qc">MRMS COMP</option>
     </optgroup>
                 <optgroup label="NEXRAD">
                     <option value="kmlb|kmlb_sr_bref" selected>MLB REF</option>
@@ -647,14 +647,17 @@ body{
                     <option value="kfll|kfll_bref1">FLL</option>
                     <option value="ktpa|ktpa_bref1">TPA</option>
                 </optgroup>
-                <optgroup label="MRMS">
-    <option value="cog|precip_rate">P-RATE</option>
-    <option value="cog|1h_qpe">1H QPE</option>
-    <option value="cog|3h_qpe">3H QPE</option>
-    <option value="cog|6h_qpe">6H QPE</option>
-    <option value="cog|12h_qpe">12H QPE</option>
-    <option value="cog|24h_qpe">24H QPE</option>
-    <option value="cog|mesh">Hail Size</option>
+                <optgroup label="QPE/HAIL">
+    <option value="cog|precip_rate">MRMS P-RATE</option>
+    <option value="cog|1h_qpe">MRMS 1H QPE</option>
+    <option value="kmlb|kmlb_boha">MLB 1H QPE</option>
+    <option value="cog|3h_inst_qpe">MRMS 3H QPE</option>
+    <option value="cog|6h_qpe">MRMS 6H QPE</option>
+    <option value="cog|12h_qpe">MRMS 12H QPE</option>
+    <option value="cog|24h_qpe">MRMS 24H QPE</option>
+    <option value="kmlb|kmlb_bdsa">MLB STA QPE</option>
+    <option value="cog|mesh">MRMS Hail Size</option>
+
 </optgroup>
                 <optgroup label="Satellite">
 <option value="sat|goes_visible_imagery">VIS</option>
@@ -3436,6 +3439,10 @@ const loadCOG = async () => {
 
 // Update your existing onchange handler
 document.getElementById('radarSelector').onchange = async (e) => {
+    activeSamples = []; // Wipe the data array
+    if (map.getSource('sample-labels')) {
+        map.getSource('sample-labels').setData({ type: 'FeatureCollection', features: [] });
+    }
     const currentOpacity = document.getElementById('miniOpacitySlider').value / 100;
     const parts = e.target.value.split('|');
     const folder = parts[0]; 
@@ -3496,12 +3503,28 @@ document.getElementById('radarSelector').onchange = async (e) => {
         sampleBtn.style.background = 'transparent';
     }
 
-    // 3. LEGEND MANAGEMENT (Async Timestamp)
+   // 3. LEGEND MANAGEMENT
     const legendEl = document.getElementById('cogLegend');
     legendEl.style.display = 'none';
 
-    if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
+    // Check for KMLB NEXRAD layers (No Timestamp)
+    const isNexradRain = layer.includes('boha') || layer.includes('bdsa') || layer.includes('bref');
+    
+    if (isNexradRain && COG_CONFIG[layer]) {
         const config = COG_CONFIG[layer];
+        window.activeLayerTimestamp = ""; // Ensure no timestamp is appended
+        document.getElementById('legendTitle').innerText = config.title;
+        document.getElementById('legendItems').innerHTML = config.steps.map(s => `
+            <div class="legend-row">
+                <div class="legend-color" style="background-color: ${s.color};"></div>
+                <span>${s.label}</span>
+            </div>`).join('');
+        legendEl.style.display = 'block';
+    } 
+    // Handle standard MRMS COGs (Includes Timestamp fetch)
+    else if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
+        const config = COG_CONFIG[layer];
+        
         const getTimestamp = async (url) => {
             try {
                 const resp = await fetch(`${url}?t=${Date.now()}`);
@@ -3518,7 +3541,9 @@ document.getElementById('radarSelector').onchange = async (e) => {
             if (isoTime) {
                 const dateObj = new Date(isoTime);
                 window.activeLayerTimestamp = ` AS OF ${dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })} ${dateObj.toLocaleDateString([], {month: '2-digit', day: '2-digit', year: '2-digit'})}`;
-            } else { window.activeLayerTimestamp = ""; }
+            } else { 
+                window.activeLayerTimestamp = ""; 
+            }
             document.getElementById('legendTitle').innerText = config.title + window.activeLayerTimestamp;
         })();
 
@@ -3986,11 +4011,27 @@ const opText = document.getElementById('miniOpacityVal');
 opToggle.onclick = (e) => {
     e.stopPropagation();
     const isVisible = opMenu.style.display === 'flex';
+    
+    // Toggle the menu visibility
     opMenu.style.display = isVisible ? 'none' : 'flex';
+    
+    // BACKLIT/ACTIVE STATE: Apply styles if the menu is now open
+    if (opMenu.style.display === 'flex') {
+        opToggle.style.background = 'rgba(56, 189, 248, 0.4)'; // Light blue backlit effect
+        opToggle.style.color = '#ffffff';                      // Bright white icon
+        opToggle.style.borderRadius = '4px';
+    } else {
+        opToggle.style.background = 'transparent';
+        opToggle.style.color = '#a9e7ff';                      // Reset to default theme color
+    }
 };
 
 // Close menu if clicking elsewhere on map
-map.on('mousedown', () => { opMenu.style.display = 'none'; });
+map.on('mousedown', () => { 
+    opMenu.style.display = 'none'; 
+    opToggle.style.background = 'transparent';
+    opToggle.style.color = '#a9e7ff';
+});
 
 // Universal Opacity Function
 opSlider.oninput = (e) => {

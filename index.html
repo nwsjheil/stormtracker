@@ -686,6 +686,10 @@ body{
     <option value="cog|24h_qpe">MRMS 24H QPE</option>
     <option value="kmlb|kmlb_bdsa">MLB STA QPE</option>
     <option value="cog|mesh">MRMS Hail Size</option>
+</optgroup>
+                <optgroup label="FLASH/CREST">
+    <option value="cog|flash_soil">Soil Saturation</option>
+    <option value="cog|flash_stream">Unit Streamflow</option>
 
 </optgroup>
                 <optgroup label="Satellite">
@@ -1749,16 +1753,16 @@ map.addLayer({
                 'interpolate',
                 ['linear'],
                 ['get', 'intensity'],
-                0, '#ff4444',   // Red when the storm is "short"
-                70, '#ffa500',  // Orange at mid-range
-                150, '#ffff00'  // Yellow when dragged far
+                0, '#5cb7db',   // Red when the storm is "short"
+                //70, '#005678',  // Orange at mid-range
+                100, '#f0f0f0'  // Yellow when dragged far
             ],
             'fill-opacity': [
                 'interpolate',
                 ['linear'],
                 ['get', 'intensity'],
-                0, 0.8,         // More solid when small
-                150, 0.4        // Very faint when long
+                0, 0.7,         // More solid when small
+                100, 0.5        // Very faint when long
             ]
         }
     });
@@ -1770,13 +1774,13 @@ map.addLayer({
         filter: ['==', '$type', 'Polygon'],
         paint: {
             'line-color': '#ffffff',
-            'line-width': 2,
+            'line-width': 4,
             'line-opacity': [
                 'interpolate',
                 ['linear'],
                 ['get', 'intensity'],
                 0, 0.8,
-                150, 0.5
+                100, 0.6
             ]
         }
     });
@@ -2187,6 +2191,16 @@ function getSampleAtLngLat(lng, lat) {
         // Note: MRMS Reflectivity is already in dBZ, no / 25.4 needed
         if (type.includes('reflectivity') || type.includes('rala')) {
             return Math.round(val) + ' dBZ';
+        }
+
+        // 4. SATURATION: %
+        if (type.includes('soil')) {
+            return (val).toFixed(0) + '%';
+        }
+
+        // 4. STREAMFLOW: 
+        if (type.includes('stream')) {
+            return (val * 91.467).toFixed(0) + ' cfs/mi²';
         }
 
         // Fallback for unknown types
@@ -3430,6 +3444,8 @@ const loadCOG = async () => {
                 if (window.activeProductType.includes('mesh')) rgba = colorRampHail(val);
                 else if (window.activeProductType.includes('rate')) rgba = colorRampPrecipRate(val);
                 else if (window.activeProductType.includes('rala') || window.activeProductType.includes('reflectivity')) rgba = colorRampReflectivity(val);
+                else if (window.activeProductType.includes('soil')) rgba = colorRampSoilProbability(val);
+                else if (window.activeProductType.includes('stream')) rgba = colorRampStreamflow(val);
                 else if (window.activeProductType.match(/6h|12h|24h/)) rgba = colorRampExtendedQPE(val / 25.4);
                 else rgba = colorRamponeHR(val / 25.4);
 
@@ -3547,6 +3563,9 @@ document.getElementById('radarSelector').onchange = async (e) => {
     if (window.activeProductType.match(/rate|qpe|mesh/)) {
         filterThreshold = filterThreshold * 25.4; 
     }
+        if (window.activeProductType.match(/stream/)) {
+        filterThreshold = filterThreshold * 91.467; 
+    }
 
     if (folder === 'cog') {
         sampleBtn.style.display = 'flex';
@@ -3561,6 +3580,10 @@ document.getElementById('radarSelector').onchange = async (e) => {
             filterSlider.min = 0; filterSlider.max = 4; filterSlider.step = 0.25;
         } else if (layer.includes('reflectivity') || layer.includes('rala')) {
             filterSlider.min = 0; filterSlider.max = 75; filterSlider.step = 5;
+        } else if (layer.includes('soil')) {
+            filterSlider.min = 40; filterSlider.max = 95; filterSlider.step = 5;
+        } else if (layer.includes('stream')) {
+            filterSlider.min = 0; filterSlider.max = 2000; filterSlider.step = 100;
         }
         filterSlider.value = 0; 
         filterValText.innerText = "0";

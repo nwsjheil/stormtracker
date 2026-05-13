@@ -584,7 +584,7 @@
         <span class="mode-key"><kbd>P</kbd></span>
       </div>
       <h4>Pan Mode</h4>
-      <p>Default navigation mode. Click and drag to move the map. Scroll to zoom in and out. No drawing or tracking is active.</p>
+      <p>Default navigation mode. Click and drag to move the map. Scroll to zoom in and out. Hold CTRL + click and drag to tilt and rotate map in 3D. No drawing or tracking is active.</p>
     </div>
 
     <div class="mode-card">
@@ -699,8 +699,9 @@
       <tr><td>NEXRAD</td><td>TBW / JAX / AMX</td><td>Tampa Bay, Jacksonville, and Miami NEXRAD base reflectivity.</td></tr>
       <tr><td>TDWR</td><td>MCO / MCO LR / PBI LR / FLL / TPA</td><td>Terminal Doppler Weather Radar products for Orlando, Palm Beach, Fort Lauderdale, and Tampa airports.</td></tr>
       <tr><td>MRMS</td><td>P-RATE</td><td>Instantaneous precipitation rate in inches per hour.</td></tr>
-      <tr><td>MRMS</td><td>1H / 3H / 6H / 12H / 24H QPE</td><td>Multi-period quantitative precipitation estimates (accumulation in inches).</td></tr>
-      <tr><td>MRMS</td><td>Hail Size</td><td>Maximum Expected Size of Hail (MESH) in inches.</td></tr>
+      <tr><td>MRMS</td><td>1H / 3H / 6H / 12H / 24H QPE</td><td>Multi-period quantitative precipitation estimates (accumulation in inches). Sampling available.</td></tr>
+      <tr><td>NEXRAD</td><td>MLB 1H / STA QPE</td><td>Melbourne WSR-88D rainfall estimates. No sampling available.</td></tr>
+      <tr><td>MRMS</td><td>Hail Size</td><td>Maximum Expected Size of Hail (MESH) in inches. Sampling available.</td></tr>
       <tr><td>Satellite</td><td>VIS</td><td>GOES visible imagery (daytime only).</td></tr>
       <tr><td>Satellite</td><td>IR</td><td>GOES longwave infrared (cloud-top temperatures, day/night).</td></tr>
       <tr><td>Satellite</td><td>WV</td><td>GOES water vapor imagery.</td></tr>
@@ -949,8 +950,8 @@
   <h3>Recommended Severe Weather Briefing Workflow</h3>
   <ol class="steps">
     <li><strong>Select radar product.</strong> Pick MLB REF for a single-site view, or MRMS for the full Florida picture. Adjust opacity to ~80% for legibility.</li>
-    <li><strong>Annotate key roads.</strong> Press <kbd>R</kbd> and click on at-risk corridors to stamp persistent road labels.</li>
-    <li><strong>Annotate values (if MRMS).</strong> Press 💧 and click to sample QPE, hail, or reflectivity values.</li>
+    <li><strong>Annotate key roads.</strong> Press <kbd>R</kbd> and click on at-risk corridors to stamp persistent road labels. <em>Turn off Road ID mode when done sampling.</em></li>
+    <li><strong>Sample values (if MRMS).</strong> Press 💧 and click to sample QPE, hail, or reflectivity values. <em>Turn off sample mode when done sampling.</em></li>
     <li><strong>Enable warnings.</strong> Press <kbd>W</kbd> to toggle warning polygons on. Click a polygon to see its full details and motion data.</li>
     <li><strong>Draw the storm track.</strong> Use <span class="btn-chip">CONE</span> for a standard forecast cone or <span class="btn-chip">TRACK</span> for a precise linear storm box. Select an appropriate duration first.</li>
     <li><strong>Add spotlight if needed.</strong> Press <kbd>S</kbd> and draw around the county of concern to focus viewer attention.</li>
@@ -962,7 +963,8 @@
   <div class="callout tip">
     <strong>Annotating:</strong> You can draw annotations with DRAW mode on top of a cone to highlight specific areas, roads, or cities within the impact corridor.
   </div>
-    <strong>Clicking On Items:</strong> Your highlighted warning may get cleared if trying to add roads or sample values. If that occurs, turn off the sample/ID features, click outside of a warning, then click the warning of interest again.
+  <div class="callout tip">
+    <strong>Clicking On Items:</strong> Your highlighted warning may get cleared if trying to add roads or sample values. If that occurs, turn off the sample/ID features, click outside of any warning, then click the warning of interest again.
   </div>  
   <div class="callout tip">
     <strong>Sampling QPE:</strong> Switch to a QPE product, activate the eyedropper (💧), and click on flooded areas to stamp rainfall totals directly on the map before exporting.

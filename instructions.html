@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weather Alert Tool — User Guide | NWS Melbourne</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -495,7 +494,7 @@
       <div class="cover-badge">NWS Melbourne · Internal Operations Tool</div>
       <div class="cover-title">Weather<br><span>Alert Tool</span></div>
       <div class="cover-sub">Storm Tracker & Impact Visualizer</div>
-      <p class="cover-desc">A real-time map-based tool for building storm tracks, visualizing radar and satellite data, overlaying NWS warnings, annotating roads, and exporting broadcast-ready graphics.</p>
+      <p class="cover-desc">A real-time map-based tool for building storm tracks, visualizing radar and satellite data, overlaying NWS warnings, annotating roads, and exporting professional graphics. <em>Developed by Jared Heil, NWS Melbourne Meteorologist.</em></p>
     </div>
     <div class="cover-radar">
       <div class="radar-ring"></div>
@@ -566,7 +565,7 @@
   <p>When a storm track is active, a draggable card appears showing the computed storm speed in MPH and a list of cities within the projected impact path. Each city row includes the estimated time of arrival (ETA). You can hover over a city row to reveal a remove button, excluding it from the impact list.</p>
 
   <h3>Data Legend (Bottom-Right)</h3>
-  <p>When a COG or MRMS product is selected (such as QPE or Hail Size), a color legend appears in the bottom-right corner identifying the data thresholds.</p>
+  <p>When MRMS products are selected (such as QPE or Hail Size), a color legend appears in the bottom-right corner identifying the data thresholds.</p>
 </section>
 
 <!-- ══════════════════ 03 MODES ══════════════════ -->
@@ -693,11 +692,11 @@
     </thead>
     <tbody>
       <tr><td>—</td><td>BLANK</td><td>No data overlay — base map only.</td></tr>
-      <tr><td>National</td><td>MRMS</td><td>CONUS-wide MRMS base reflectivity composite (national overview).</td></tr>
-      <tr><td>Regional</td><td>BREF</td><td>Regional base reflectivity COG product (RALA).</td></tr>
-      <tr><td>Regional</td><td>COMP</td><td>Regional quality-controlled composite reflectivity COG.</td></tr>
+      <tr><td>National</td><td>MOSAIC</td><td>CONUS-wide base reflectivity composite (national overview).</td></tr>
+      <tr><td>Regional</td><td>BREF</td><td>Regional base reflectivity MRMS product (RALA).</td></tr>
+      <tr><td>Regional</td><td>COMP</td><td>Regional quality-controlled composite reflectivity MRMS product.</td></tr>
       <tr><td>NEXRAD</td><td>MLB REF / VEL</td><td>Melbourne WSR-88D super-resolution base reflectivity or velocity.</td></tr>
-      <tr><td>NEXRAD</td><td>TBW / JAX / MIA</td><td>Tampa Bay, Jacksonville, and Miami NEXRAD base reflectivity.</td></tr>
+      <tr><td>NEXRAD</td><td>TBW / JAX / AMX</td><td>Tampa Bay, Jacksonville, and Miami NEXRAD base reflectivity.</td></tr>
       <tr><td>TDWR</td><td>MCO / MCO LR / PBI LR / FLL / TPA</td><td>Terminal Doppler Weather Radar products for Orlando, Palm Beach, Fort Lauderdale, and Tampa airports.</td></tr>
       <tr><td>MRMS</td><td>P-RATE</td><td>Instantaneous precipitation rate in inches per hour.</td></tr>
       <tr><td>MRMS</td><td>1H / 3H / 6H / 12H / 24H QPE</td><td>Multi-period quantitative precipitation estimates (accumulation in inches).</td></tr>
@@ -712,13 +711,13 @@
   <p>Click the <strong>◐</strong> icon next to the DATA selector to open a mini panel. The opacity slider controls transparency for all active data layers simultaneously. Default is 90%. Useful for balancing radar visibility against the base map when presenting.</p>
 
   <h3>Data Threshold Filter</h3>
-  <p>When a COG product is active (MRMS, QPE, MESH), a <strong>Data Threshold</strong> slider appears inside the opacity panel. Slide it to filter out values below a given threshold — helpful for suppressing light rain noise when focusing on heavy rainfall or hail cores.</p>
+  <p>When an MRMS product is active (QPE, MESH, Regional Reflectivity), a <strong>Data Threshold</strong> slider appears inside the opacity panel. Slide it to filter out values below a given threshold — helpful for suppressing light rain noise when focusing on heavy rainfall or hail cores.</p>
 
   <h3>Data Sampling (Eyedropper)</h3>
-  <p>When a COG or MRMS product is loaded, a <strong>💧</strong> eyedropper icon appears in the DATA group. Click it to activate sample mode, then click anywhere on the data overlay to stamp the measured value at that point (reflectivity in dBZ, precipitation in inches, hail size in inches). Samples persist until cleared with ERASE.</p>
+  <p>When an MRMS product is loaded, a <strong>💧</strong> eyedropper icon appears in the DATA group. Click it to activate sample mode, then click anywhere on the data overlay to stamp the measured value at that point (reflectivity in dBZ, precipitation in inches, hail size in inches). Samples persist until cleared with ERASE.</p>
 
   <h3>Lightning Overlay</h3>
-  <p>Click the <span class="btn-chip">⚡</span> button to toggle real-time lightning strike data. When active, bolt icons appear on the map and the data refreshes automatically every 60 seconds. Lightning data is sourced from jhwxtools.com/mrms.</p>
+  <p>Click the <span class="btn-chip">⚡</span> button to toggle real-time lightning strike data from MRMS. When active, bolt icons appear on the map and the data refreshes automatically every 60 seconds. Lightning data is sourced from jhwxtools.com/mrms.</p>
 
   <div class="callout">
     <strong>Auto-refresh:</strong> NWS warning polygons update automatically every 2 minutes. Lightning data refreshes every 60 seconds when the lightning layer is active.
@@ -762,12 +761,12 @@
   <p>Once a track is drawn, the Storm Impact Card appears in the lower-left corner. It shows:</p>
   <ul style="list-style:none; margin-bottom:16px;">
     <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">Storm Speed</strong> — Computed from the drag distance and selected duration, displayed in MPH.</li>
-    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">City Impact List</strong> — Cities within the projected impact area, sorted by ETA. Hover to reveal a Remove button to exclude a city from the list.</li>
+    <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14.5px;"><strong style="color:#e2e8f0;">City Impact List</strong> — Cities within the projected impact area, sorted by ETA. Hover to reveal a Remove button to exclude a city from the list. This will also hide it from the track ETA pop-ups on the map.</li>
   </ul>
   <p>The card can be dragged anywhere on the screen by its header handle. It is automatically hidden during export.</p>
 
   <h3>ETA Tick Marks</h3>
-  <p>Time tick marks are drawn along the centerline at regular intervals based on storm speed. These show how long it will take the storm to reach each point along the track. Tick mark spacing adjusts dynamically when you zoom the map.</p>
+  <p>Time tick marks are drawn along the centerline at regular intervals based on storm speed. These show how long it will take the storm to reach each point along the track. Tick marks are for 15 minute intervals on 30 minute and one hour tracks and 30 minutes for 2 hour tracks.</p>
 
   <div class="callout warn">
     <strong>Starting a new track:</strong> Beginning a new drag in Cone or Track mode will automatically clear the previous track. You do not need to press Clear Track first.
@@ -849,7 +848,7 @@
     <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Hail descriptions</strong> — Hail size is automatically translated to a size reference (e.g. "1.75 in (Golf Ball)").</li>
     <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Motion</strong> — Storm motion is parsed from the NWS warning data and displayed as cardinal direction and rounded MPH.</li>
     <li style="padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Draggable</strong> — The popup can be dragged by its header to reposition it anywhere on screen.</li>
-    <li style="padding:7px 0; color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Ignore</strong> — Each popup includes an Ignore button to permanently hide that warning from display for the current session.</li>
+    <li style="padding:7px 0; color:#94a3b8; font-size:14px;"><strong style="color:#e2e8f0;">Social Media Text</strong> — Hover over the pop-up and click <span class="btn-chip">COPY SHORT TEXT</span> to get a sub-240 character snippet to copy for social media.</li>
   </ul>
 
   <div class="callout">
@@ -864,7 +863,7 @@
     <h2 class="section-title">Export</h2>
     <span class="section-icon">📤</span>
   </div>
-  <p>The export system captures the current map view as a 16:9 broadcast-ready graphic (1350×759 px) with an NWS Melbourne branded banner.</p>
+  <p>The export system captures the current map view as a 16:9 graphic (1350×759 px) with an NWS Melbourne branded banner.</p>
 
   <div class="workflow">
     <div class="workflow-step">
@@ -879,11 +878,16 @@
     </div>
     <div class="workflow-step">
       <div class="workflow-step-num">STEP 03</div>
-      <strong>Frame the shot</strong>
-      The viewfinder overlay appears. Pan and zoom to position the content inside the frame.
+      <strong>Enter Password</strong>
+      Required once per session. Use the password found at <a href="https://docs.google.com/document/d/1lWcRUdplgO3lBndSz2VivlbfEaI_qu166_iRJg12-oc/preview?tab=t.0" target="_blank">this link.</a></span>.
     </div>
     <div class="workflow-step">
       <div class="workflow-step-num">STEP 04</div>
+      <strong>Frame the shot</strong>
+      The viewfinder overlay appears. Pan and zoom to position the content inside the frame. Move warning pop-up if needed.
+    </div>
+    <div class="workflow-step">
+      <div class="workflow-step-num">STEP 05</div>
       <strong>Confirm or cancel</strong>
       Press <kbd>Enter</kbd> or click <span class="btn-chip active">EXPORT NOW & COPY</span>. Press <kbd>Esc</kbd> or click Cancel to exit without exporting.
     </div>

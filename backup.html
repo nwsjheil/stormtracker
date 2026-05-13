@@ -1,1 +1,2975 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+    <meta name="robots" content="noindex, nofollow">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<title>Weather Alert Tool | NWS Melbourne</title>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+<link
+href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css"
+rel="stylesheet"
+/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+<style>
+
+:root{
+    --accent:#a9e7ff;
+    --bg:#004b69;
+    --danger:#ff4444;
+}
+
+body{
+    margin:0;
+    overflow:hidden;
+    background:var(--bg);
+    font-family:'Trebuchet MS',sans-serif;
+}
+
+#map{
+    position:absolute;
+    inset:0;
+    cursor:crosshair;
+}
+
+/* ======================================
+   TOOLBAR
+====================================== */
+.toolbar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 20;
+
+    /* Add these lines */
+    background: rgba(0, 49, 88, 0.45); /* Dark blue with 75% opacity */
+    padding: 10px;                     /* Added padding so the bg is visible around items */
+    border-radius: 12px;               /* Smoothes the corners */
+    backdrop-filter: blur(7px);       /* Optional: creates a frosted glass effect */
+    border: 3px solid rgba(255, 255, 255, 0.2); /* Subtle border to define the edge */
+}
+
+/* row system */
+.toolbar-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+/* groups are the key to compact UI */
+.tool-group{
+    display:flex;
+    gap:6px;
+    padding:6px;
+    border-radius:12px;
+    background:rgba(15,23,42,.75);
+    border:1px solid rgba(255,255,255,.06);
+    backdrop-filter: blur(10px);
+}
+
+/* slimmer buttons */
+.tool{
+    padding: 6px 10px;
+    height: 30px;
+    display:flex;
+    align-items:center;
+    border-radius:10px;
+    background:transparent;
+    border:1px solid rgba(255,255,255,.08);
+    color:#cbd5e1;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+    white-space:nowrap;
+}
+
+.tool.active{
+    background:var(--accent);
+    color:black;
+}
+
+.tool.danger-btn{
+    color:var(--danger);
+}
+
+.tool.erase-btn:hover {
+    background: #f87171; 
+    color: white;
+    border-color: #f87171;
+}
+
+.tool.danger-btn:hover {
+    background: #ff4444 !important; /* Forces the red background */
+    color: white !important;
+    border-color: #ff4444;
+}
+
+/* secondary row is tighter */
+.toolbar-row.secondary .tool-group{
+    padding:5px;
+    gap:5px;
+}
+
+/* Standard hover for toolbar buttons */
+.tool:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent);
+    color: white;
+    transition: all 0.2s ease;
+}
+
+/* Ensure the active button doesn't shift styles on hover */
+.tool.active:hover {
+    background: var(--accent);
+    color: black;
+}
+
+
+
+/* radar dropdown styling fix */
+#radarSelector{
+    background:transparent;
+    color:#38bdf8;
+    border:none;
+    font-size:11px;
+    font-weight:800;
+    outline:none;
+}
+
+#durationGroup {
+    display: flex !important;
+    flex-direction: row;
+    gap: 5px;
+    padding: 0 10px;
+    background: rgba(15, 23, 42, .92);
+    border-radius: 12px;
+    height: 40px;
+    align-items: center;
+}
+
+.dur-btn {
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.dur-btn:hover {
+    background: rgba(56, 189, 248, 0.2); /* Light blue tint */
+    border-color: var(--accent);
+    color: white;
+}
+
+.dur-btn.active {
+    background: var(--accent);
+    color: black;
+    border-color: var(--accent);
+}
+
+/* Specific green hover for the Help button only */
+.tool-group a[href*="docs.google.com"]:hover {
+    background: #22c55e !important; /* Success Green */
+    border-color: #16a34a !important;
+    color: white !important;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+    transition: all 0.2s ease;
+}
+
+#widthContainer {
+    display: none; /* Controlled by JS */
+    flex-direction: row;
+    align-items: center;
+    padding: 0 15px;
+}
+
+#widthSlider {
+    cursor: pointer;
+    accent-color: var(--accent);
+    width: 50px;
+    height: 4px;
+    margin: 0 5px;
+}
+
+/* ======================================
+   CARD
+====================================== */
+
+.ui-card {
+    position: absolute;
+    left: 30px;
+    bottom: 30px;
+    /* Remove bottom: 30px if you want it to stay where dropped */
+    width: 320px;
+    background: rgba(0, 83, 116, 0.92);
+    backdrop-filter: blur(12px);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 20px;
+    z-index: 100;
+    user-select: none;
+    -webkit-print-color-adjust: exact; /* Helps some browsers render colors in capture */
+    display: none;
+}
+
+.export-map-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5; /* Behind the UI card, but over the real map */
+}
+
+.speed{
+    font-size:34px;
+    font-weight:900;
+    color:var(--accent);
+}
+
+/* Reverting to your original clean font and size */
+.city-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    font-size: 14px;
+    color: white;
+    transition: background 0.2s;
+    cursor: default;
+}
+
+.city-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* The pink "Remove" box */
+.remove-trigger {
+    display: none; /* Hidden by default */
+    background: #ffe4e6;
+    color: #991b1b;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+}
+
+.city-row:hover .remove-trigger {
+    display: inline-block; /* Show on hover */
+}
+
+/* ======================================
+   ETA BOXES
+====================================== */
+
+/* Locate .eta-box in your <style> tag and update it */
+.eta-box {
+    width: auto;
+    min-width: 60px;
+    padding: 10px 16px;      /* Increased padding */
+    border-radius: 14px;
+    background: rgba(15, 23, 42, .96);
+    border: 2px solid var(--accent); /* Added a thicker border for visibility */
+    color: white;
+    font-size: 16px;         /* Increased from 12px */
+    font-weight: 1200;
+    backdrop-filter: blur(10px);
+    font-family:'Trebuchet MS'
+}
+
+.eta-box span {
+    display: block;
+    color: var(--accent);
+    font-size: 13px;         /* Increased from 10px */
+    margin-top: 4px;
+}
+
+/* ======================================
+   HELP
+====================================== */
+
+.help{
+    position:absolute;
+    top:20px;
+    right:20px;
+    background:rgba(15,23,42,.92);
+    border-radius:14px;
+    padding:12px 14px;
+    color:#cbd5e1;
+    font-size:12px;
+    line-height:1.6;
+    z-index:10;
+}
+#exportViewfinder {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 1350px;  /* Target Width */
+    height: 759px;  /* Target Total Height (16:9) */
+    transform: translate(-50%, -50%);
+    border: 3px solid var(--accent);
+    z-index: 5000;
+    pointer-events: none;
+    box-shadow: 0 0 0 10000px rgba(0, 0, 0, 0.8);
+}
+
+#previewBanner {
+    width: 100%;
+    height: 120px; 
+    background: linear-gradient(90deg, #001c2b 0%, #002c69 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between; 
+    padding: 0 30px;
+    box-sizing: border-box;
+    /* This fixes "grainy" text rendering in the browser */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Container for the Left-side Text */
+.banner-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Top line: WEATHER IMPACT + UPDATE */
+.banner-main-row {
+    display: flex;
+    align-items: center;
+    gap: 17px; /* Matches your Canvas badgeX offset */
+}
+
+.banner-title {
+    color: #ffffff;
+    font-family: 'Roboto', sans-serif;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-shadow: 0 0 4px rgba(0,0,0,0.3); /* Matches your shadowBlur */
+}
+
+.banner-badge {
+    background: #a9e7ff;
+    color: #001c2b;
+    font-family: 'Roboto', sans-serif;
+    font-size: 24px;
+    font-weight: 900;
+    padding: 4px 18px; /* Balanced to match the 115px width */
+    border-radius: 6px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#previewTS {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#exportUI {
+    display: none;
+    position: fixed;
+    bottom: 40px;
+    right: 40px;
+    z-index: 9999; /* Higher than the viewfinder shadow */
+    gap: 12px;
+}
+
+#editableText {
+    color: white; 
+    font-family: 'Trebuchet MS'; 
+    font-size: 24px; 
+    outline: none; 
+    font-weight: bold; 
+    text-align: center; /* Changed from left to center */
+    min-height: 1em;
+    line-height: 1.2;
+}
+
+/* Custom cursors for specific modes */
+.cursor-crosshair {
+    cursor: crosshair !important;
+}
+/* Removes the triangle/tip from all warning popups */
+.custom-warning-popup .maplibregl-popup-tip {
+    display: none !important;
+}
+
+/* Fixes the gap created when the tip is removed */
+.custom-warning-popup .maplibregl-popup-content {
+    padding: 0;
+    border-radius: 12px;
+    margin: 0;
+}
+
+/* Hover logic for the X button */
+.custom-warning-popup:hover .close-warn-btn {
+    opacity: 1 !important;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="toolbar">
+
+    <!-- =========================
+         ROW 1: MODE GROUPS
+    ========================== -->
+    <div class="toolbar-row">
+
+        <div class="tool-group">
+            <div class="tool active" id="panBtn">PAN</div>
+        </div>
+
+        <div class="tool-group">
+            <div class="tool" id="coneBtn">CONE</div>
+            <div class="tool" id="manualBtn">TRACK</div>
+        </div>
+<div class="tool-group">
+    <div class="tool" id="drawBtn">DRAW</div>
+    <div class="tool" id="spotBtn">SPOT</div>
+    <div class="tool erase-btn" id="eraseBtn">ERASE</div>
+</div>
+
+        <div class="tool-group">
+            <div class="tool" id="addTextBtn">TEXT</div>
+        </div>
+
+        <div class="tool-group">
+            <div class="tool" id="exportBtn">EXPORT</div>
+        </div>
+        <div class="tool-group">
+            <a href="https://docs.google.com/document/d/1lWcRUdplgO3lBndSz2VivlbfEaI_qu166_iRJg12-oc/preview" 
+            target="_blank" 
+            class="tool" 
+            style="text-decoration:none; color:#cbd5e1;">HELP</a>
+        </div>
+    </div>
+
+
+    <!-- =========================
+         ROW 2: CONTEXT TOOLS
+    ========================== -->
+
+    <div class="toolbar-row secondary">
+
+        <!-- RADAR -->
+        <div class="tool dropdown" id="radarWrapper">
+            <span style="font-size:10px; color:#94a3b8;">DATA</span>
+            <select id="radarSelector">
+                <option value="none|none">BLANK</option>
+                <optgroup label="NATIONAL">
+        <option value="conus|conus_bref_qcd">MRMS</option>
+    </optgroup>
+                <optgroup label="NEXRAD">
+                    <option value="kmlb|kmlb_sr_bref" selected>MLB REF</option>
+                    <option value="kmlb|kmlb_sr_bvel" >MLB VEL</option>
+                    <option value="ktbw|ktbw_sr_bref">TBW</option>
+                    <option value="kjax|kjax_sr_bref">JAX</option>
+                    <option value="kamx|kamx_sr_bref">MIA</option>
+                </optgroup>
+                <optgroup label="TDWR">
+                    <option value="tmco|tmco_bref1">MCO</option>
+                    <option value="tmco|tmco_brefl">MCO LR</option>
+                    <option value="tpbi|tpbi_bref1">PBI</option>
+                    <option value="tpbi|tpbi_brefl">PBI LR</option>
+                    <option value="kfll|kfll_bref1">FLL</option>
+                    <option value="ktpa|ktpa_bref1">TPA</option>
+                </optgroup>
+                <optgroup label="Satellite">
+<option value="sat|goes_visible_imagery">VIS</option>
+    <option value="sat|goes_longwave_imagery">IR</option>
+    <option value="sat|goes_water_vapor_imagery">WV</option></optgroup>
+
+            </select>
+        </div>
+
+        <!-- DURATION -->
+        <div class="tool-group" id="durationGroup">
+            <button class="dur-btn" data-mins="30">30m</button>
+            <button class="dur-btn active" data-mins="60">1h</button>
+            <button class="dur-btn" data-mins="120">2h</button>
+        </div>
+        <div class="tool-group">
+            <div class="tool" id="warningToggle">WARNINGS</div>
+        </div>
+        <!-- FAN WIDTH -->
+        <div class="tool-group" id="widthContainer">
+            <span style="font-size:10px; color:#94a3b8;">FAN</span>
+            <input type="range" id="widthSlider" min="20" max="50" value="30">
+            <span id="widthVal" style="font-size:15px; color:#94a3b8;">30</span>
+        </div>
+
+        <div class="tool-group">
+            <div class="tool danger-btn" id="clearBtn">CLEAR<br>TRACK</div>
+        </div>
+
+    </div>
+
+</div>
+<div class="ui-card" id="draggableCard">
+    <div id="dragHandle" style="cursor: move; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/US-NationalWeatherService-Logo.svg/500px-US-NationalWeatherService-Logo.svg.png" alt="NWS" style="width: 24px; height: 24px;">
+        <div style="font-size: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase;">
+            Storm Impact Tracker<br>Tracking Speed
+        </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:15px;">
+        <div class="speed" id="mph">0 MPH</div>
+    </div>
+    <div id="impacts"></div>
+</div>
+
+<div class="help" id="help">
+
+    CONE MODE:<br>
+    CLICK + DRAG TO TRACK
+
+</div>
+<div id="customTextBox" style="display:none; position:absolute; top:40%; left:40%; z-index:200; padding:10px; border-radius:12px; background:rgba(138, 64, 0, 0.6); border:2px solid var(--accent); backdrop-filter:blur(8px); min-width:200px;">
+    
+    <div id="textDragHandle" style="height:14px; cursor:move; background:rgba(255,255,255,0.1); border-radius:4px; margin-bottom:8px; display:flex; justify-content:center; align-items:center;">
+        <div style="width:30px; height:2px; background:rgba(255,255,255,0.3); border-radius:2px;"></div>
+    </div>
+
+    <div id="editableText" contenteditable="true" >ENTER TEXT</div>
+    
+    <div id="textControls" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; background:rgba(0,0,0,0.4); padding:8px; border-radius:8px; align-items:center;">
+        <input type="color" id="fontColor" value="#ffffff" title="Text Color" style="width:22px; height:22px; border:none; background:none; cursor:pointer;">
+        <input type="color" id="bgColor" value="#8a3c00" title="Background Color" style="width:22px; height:22px; border:none; background:none; cursor:pointer;">
+        
+        <select id="fontSize" onchange="formatDoc('fontSize', this.value)" style="background:#1e293b; color:white; border:none; border-radius:4px; font-size:11px; padding:2px;">
+            <option value="3">Small</option>
+            <option value="4" selected>Normal</option>
+            <option value="5">Large</option>
+            <option value="6">X-Large</option>
+            <option value="7">Huge</option>
+        </select>
+
+        <div style="display:flex; gap:2px; border-left:1px solid rgba(255,255,255,0.2); padding-left:5px;">
+            <button onclick="formatDoc('justifyLeft')" style="background:#1e293b; color:white; border:none; border-radius:4px; width:25px; cursor:pointer; font-size:10px;">L</button>
+            <button onclick="formatDoc('justifyCenter')" style="background:#1e293b; color:white; border:none; border-radius:4px; width:25px; cursor:pointer; font-size:10px;">C</button>
+            <button onclick="formatDoc('justifyRight')" style="background:#1e293b; color:white; border:none; border-radius:4px; width:25px; cursor:pointer; font-size:10px;">R</button>
+        </div>
+
+        <button onclick="formatDoc('bold')" style="background:#1e293b; color:white; border:none; border-radius:4px; width:22px; cursor:pointer;">B</button>
+        <button onclick="formatDoc('italic')" style="background:#1e293b; color:white; border:none; border-radius:4px; width:22px; cursor:pointer;">I</button>
+        <button id="closeText" style="background:#ef4444; color:white; border:none; border-radius:4px; width:22px; cursor:pointer;">X</button>
+    </div>
+</div>
+<div id="exportViewfinder">
+    <div id="previewBanner">
+        <div class="banner-text-group">
+            <div class="banner-main-row">
+                <div class="banner-title">Weather Impact</div>
+                <div class="banner-badge">UPDATE</div>
+            </div>
+            <div id="previewTS"></div>
+        </div>
+
+        <img src="https://www.weather.gov/images/mlb/WFOMLBlogo-w.png" style="height:100px;">
+    </div>
+</div>
+
+<div id="exportUI" style="display:none; position:fixed; bottom:30px; right:30px; z-index:5001; gap:10px;">
+    <button class="tool" id="cancelExport" style="background:#ef4444; color:white;">CANCEL</button>
+    <button class="tool active" id="confirmExport">EXPORT NOW & COPY</button>
+</div>
+<script>
+let coneWidth = 30; // Default width
+const widthSlider = document.getElementById('widthSlider');
+const widthVal = document.getElementById('widthVal');
+// Change this at the top of your <script>
+let selectedDuration = 60; // Default to 1 Hour (60 mins)
+
+document.querySelectorAll('.dur-btn').forEach(btn => {
+    btn.onclick = (e) => {
+        // 1. Update active UI state
+        document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // 2. Update the global duration variable
+        selectedDuration = parseInt(btn.getAttribute('data-mins'), 10);        
+        
+        // 3. Re-draw the current track with the NEW duration
+        // Use the stored currentEndPoint instead of map.getCenter()
+        if (startPoint && window.currentEndPoint) {
+            const speedMPH = Number(document.getElementById('mph').innerText.replace(/[^0-9.]/g,'')) || 0;
+            
+            if (mode === 'cone') {
+                drawCone(startPoint, window.currentEndPoint, speedMPH);
+            } else if (mode === 'manual' && edgeLocked) {
+                drawProjectedTracker(window.currentEndPoint);
+            }
+        }
+    };
+});
+widthSlider.oninput = (e) => {
+    coneWidth = parseInt(e.target.value);
+    widthVal.innerText = coneWidth;
+    if (startPoint && window.currentEndPoint) {
+      const speedMPH = Number(document.getElementById('mph').innerText.replace(/[^0-9.]/g,'')) || 0;
+        drawCone(startPoint, window.currentEndPoint, speedMPH);
+    }
+    
+    // Check if we have a storm source and a start/end point to redraw
+    if (startPoint && mode === 'cone') {
+        const mouse = [map.getCenter().lng, map.getCenter().lat]; // Fallback
+        // Get the current end point from the existing storm data if possible
+        const stormSource = map.getSource('storm');
+        if (stormSource && stormSource._data.features.length > 0) {
+            // Re-run drawCone using the global coneWidth
+            const hours = selectedDuration / 60;
+            // We use the last calculated speed to maintain geometry
+            const speedMPH = Number(document.getElementById('mph').innerText.replace(/[^0-9.]/g,'')) || 0;
+            const distance = speedMPH * hours;
+            
+            // Note: We need a reference to the 'end' point. 
+            // If you store 'currentEndPoint' globally, use that:
+            if(window.currentEndPoint) {
+                drawCone(startPoint, window.currentEndPoint, speedMPH);
+            }
+        }
+    }
+};
+const map = new maplibregl.Map({
+
+    container:'map',
+    preserveDrawingBuffer: true, // REQUIRED FOR PNG EXPORT
+    style:{
+        version:8,
+glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+sources: {
+'esri-dark-base': {
+        type: 'raster',
+        tiles: ['https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256,
+        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+    },
+    'esri-dark-labels': {
+        type: 'raster',
+        tiles: ['https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256
+    }
+},
+layers: [
+{
+        id: 'base-layer',
+        type: 'raster',
+        source: 'esri-dark-base'
+    },
+//    {
+//        id: 'labels-layer',
+//        type: 'raster',
+//        source: 'esri-dark-labels'
+//    }
+]
+    },
+
+    center:[-81.4,28.5],
+    zoom:7
+
+});
+
+let mode = 'pan';
+
+let drawings = [];
+
+let currentDrawing = [];
+
+let drawColor = '#ffff00';
+
+let drawWidth = 6;
+
+let dragging = false;
+
+let edgeLocked = false;
+
+let startPoint = null;
+
+let stormLine = [];
+let lastETALine = null;
+let etaLabels = [];
+let staticStormVector = null;
+let flCitiesGeo = [];
+let stormState = {
+    speed: 0,
+    bearing: 0
+};
+let lockedProjection = null;
+let ignoredCities = []; // Names of cities the user has clicked to "X" out
+let ignoredWarnings = []; // Stores the 'id' or 'identifier' of closed warnings
+let isolatedWarningId = null;
+const panBtn = document.getElementById('panBtn');
+const coneBtn = document.getElementById('coneBtn');
+const manualBtn = document.getElementById('manualBtn');
+const drawBtn = document.getElementById('drawBtn');
+const clearBtn = document.getElementById('clearBtn');
+const eraseBtn = document.getElementById('eraseBtn');
+const spotBtn = document.getElementById('spotBtn');
+/* =========================================
+   AUTHORITATIVE PLACES SOURCE
+========================================= */
+
+map.on('load', () => {
+    // 1. Define the Vector Source
+    map.addSource('esri-base', {
+        type: 'vector',
+        tiles: ['https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf']
+    });
+
+    const shields = [
+        ['i-4', '4.png'],
+        ['i-75', '75.png'],
+        ['i-95', '95.png'],
+        ['us-417', '417.png'],
+        ['us-429', '429.png'],
+        ['us-528', '528.png'],
+        ['fltpk', 'fltpk.png']
+    ];
+
+    const base = 'https://nwsjheil.github.io/stormtracker';
+
+    let loaded = 0;
+
+    shields.forEach(([id, file]) => {
+
+        const url = `${base}/${file}`;
+
+        map.loadImage(url, (err, img) => {
+
+            if (err) {
+                console.error('FAILED TO LOAD:', id, url, err);
+                return;
+            }
+
+            if (!map.hasImage(id)) {
+                map.addImage(id, img);
+                console.log('LOADED SHIELD:', id);
+            }
+
+            loaded++;
+
+            if (loaded === shields.length) {
+                console.log('ALL SHIELDS READY');
+            }
+        });
+
+    });
+
+
+    // 2. Define the Radar Source
+    map.addSource('radar', {
+        type: 'raster',
+        tiles: ['https://opengeo.ncep.noaa.gov/geoserver/kmlb/ows?service=WMS&version=1.1.1&request=GetMap&layers=kmlb_sr_bref&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}'],
+        tileSize: 256,
+        
+    });
+
+        map.addSource('drawings', {
+    type: 'geojson',
+    data: {
+        type: 'FeatureCollection',
+        features: []
+    }
+});
+
+    // Click to Query
+map.on('click', 'warnings-shading', (e) => {
+    if (!e.features || e.features.length === 0) return; // Guard clause
+    
+    e.originalEvent.stopPropagation();
+    const feat = e.features[0];
+    
+    // Debugging line: Open your console (F12) to see if the click is registering
+    console.log("Clicked Event:", feat.properties.event);
+    
+    // 1. Clear the old selection state using the numeric ID
+    if (isolatedWarningId !== null) {
+        map.setFeatureState(
+            { source: 'nws-warnings', id: isolatedWarningId },
+            { selected: false }
+        );
+    }
+
+    // 2. Set the NEW numeric ID (assigned in step 1)
+    isolatedWarningId = feat.id; 
+    
+    // 3. Set the new selection state
+    map.setFeatureState(
+        { source: 'nws-warnings', id: isolatedWarningId },
+        { selected: true }
+    );
+
+    // 4. Force the repaint
+    applyWarningIsolation();
+
+const props = feat.properties;
+const warnId = props.id;
+
+// 1. DEFINE EXPIRESTR FIRST (The missing piece)
+const expireDate = new Date(props.ends || props.expires);
+const expireStr = expireDate.toLocaleTimeString([], { 
+    hour: 'numeric', 
+    minute: '2-digit', 
+    timeZoneName: 'short' 
+});
+
+        // NWS Standard Color Lookup
+        const hazardColors = {
+            'Tornado Warning': '#FF0000',
+            'Severe Thunderstorm Warning': '#FFFF00',
+            'Flash Flood Warning': '#00FF00',
+            'Flood Advisory': '#4ade80',
+            'Special Marine Warning': '#FFA500',
+            'Special Weather Statement': '#D2B48C'
+        };
+
+        const activeColor = hazardColors[props.event] || '#FFFFFF';
+        // Ensure text/icons are dark on light colors (Yellow, Green, Pink)
+        const isDarkText = ['#FFFF00', '#00FF00', '#D2B48C'].includes(activeColor);
+        const iconColor = isDarkText ? '#000000' : '#FFFFFF';
+
+// --- Advanced Hazard Parsing (Fixed for JSON strings) ---
+let params = props.parameters || {};
+
+// If parameters is a string (common in MapLibre/GeoJSON processing), parse it
+if (typeof params === 'string') {
+    try {
+        params = JSON.parse(params);
+    } catch (e) {
+        params = {};
+    }
+}
+
+// 1. Update the parsing logic (around line 457)
+const wind = params.maxWindGust && params.maxWindGust[0] ? params.maxWindGust[0] : null;
+
+// Use 'hail' as the variable name to satisfy the template
+const rawHail = params.maxHailSize && params.maxHailSize[0] ? params.maxHailSize[0] : null;
+const hailDesc = rawHail ? getHailDescription(rawHail) : null;
+const hail = rawHail ? `${rawHail}" ${hailDesc}` : null; // This defines 'hail'
+
+// Flood/Tornado/Water Hazards
+const torn = props.tornadoDetection ? `Tornado: ${props.tornadoDetection}` : null;
+const water = params.waterspoutDetection && params.waterspoutDetection[0] ? `Waterspout: ${params.waterspoutDetection[0]}` : null;
+const ffDetection = params.flashFloodDetection ? params.flashFloodDetection[0] : null;
+const ffThreat = params.flashFloodDamageThreat ? params.flashFloodDamageThreat[0] : null;
+
+// 2. Update the HTML Template (around line 485)
+// Ensure every variable used here is defined above
+const popupHtml = `
+    <div id="warn-popup-${warnId}" class="movable-popup" style="width:280px; padding:12px; font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44;">
+        <div class="popup-handle" style="cursor:move; height:14px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:flex-end; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
+            <button class="close-warn-btn" onclick="closeWarningPopup()" style="background:rgba(0,0,0,0.2); color:${iconColor}; border:1px solid rgba(0,0,0,0.1); border-radius:4px; width:22px; height:22px; cursor:pointer; font-weight:bold; opacity:0; transition:opacity 0.2s; display:flex; align-items:center; justify-content:center; font-size:11px;">✕</button>
+        </div>
+
+        <div style="padding-top:10px;">
+            <b style="color:#b91c1c; text-transform:uppercase; font-size:15px; display:block; margin-bottom:2px;">${props.event}</b>
+            <div style="font-size:12px; color:#334155; margin-bottom:6px;"><b>Ends:</b> ${expireStr}</div>
+            
+            ${(wind || hail || torn || water || ffDetection || ffThreat) ? `
+            <div style="background:#fff1f2; border:1px solid #fecaca; padding:8px; border-radius:6px; margin:5px 0;">
+                <b style="color:#991b1b; font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">Hazards</b>
+                ${wind ? `<div style="font-size:12px;">Wind: ${wind}</div>` : ''}
+                ${hail ? `<div style="font-size:12px;">Hail: ${hail}</div>` : ''}
+                ${ffDetection ? `<div style="font-size:12px;">Detection: ${ffDetection}</div>` : ''}
+                ${ffThreat ? `<div style="font-size:12px;">Threat: ${ffThreat}</div>` : ''}
+                ${torn ? `<div style="font-size:12px;">${torn}</div>` : ''}
+                ${water ? `<div style="font-size:12px;">${water}</div>` : ''}
+            </div>` : ''}
+
+            <div style="max-height:70px; overflow-y:auto; border-top:1px solid #e2e8f0; padding-top:6px; font-size:12px; color:#64748b; line-height:1.3;">
+                <b>Areas:</b> ${props.areaDesc}
+            </div>
+        </div>
+    </div>
+`;
+
+        const popup = new maplibregl.Popup({ 
+            closeButton: false, 
+            maxWidth: 'none', 
+            className: 'custom-warning-popup',
+        // 1. Change anchor to bottom-right so the box grows UP and LEFT from the point
+            anchor: 'bottom-right', 
+            // 2. Add an offset to give it some 'breathing room' from the cursor
+            // [x, y] - negative x moves left, negative y moves up
+            offset: [-10, -10]
+        })
+            .setLngLat(e.lngLat)
+            .setHTML(popupHtml)
+            .addTo(map);
+
+        popup.on('close', () => resetWarningIsolation());
+        makePopupDraggable(`warn-popup-${warnId}`);
+    });
+
+    // Cursor feedback
+    map.on('mouseenter', 'warnings-shading', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'warnings-shading', () => map.getCanvas().style.cursor = '');
+
+    // 1. Add the New GeoJSON Source
+    map.addSource('nws-warnings', { 
+        type: 'geojson', 
+        data: { type: 'FeatureCollection', features: [] } 
+    });
+
+    // 3. Add Radar Layer
+    map.addLayer({
+        id: 'radar',
+        type: 'raster',
+        source: 'radar',
+        paint: { 
+            'raster-opacity': 0.92, 
+            'raster-contrast': 0.3,
+            'raster-brightness-max': 0.8,
+            'raster-resampling': 'linear' 
+        }    
+    });
+
+map.addLayer({
+    id: 'spotlight-layer',
+    type: 'fill',
+    source: 'drawings',
+    filter: ['==', ['get', 'kind'], 'spotlight'],
+    paint: {
+        'fill-color': '#000000',
+        'fill-opacity': 0.7 // Make it darker for better effect
+    }
+});
+
+    // 2. Add Shading Layer (BELOW radar)
+ map.addLayer({
+    id: 'warnings-shading',
+    type: 'fill',
+    source: 'nws-warnings',
+    layout: { 'visibility': 'none' },
+    paint: {
+        'fill-color': [
+            'case',
+            ['in', 'Tornado', ['get', 'event']], '#FF0000',
+            ['in', 'Severe Thunderstorm', ['get', 'event']], '#FFFF00',
+            ['in', 'Flash Flood', ['get', 'event']], '#00FF00',
+            ['in', 'Flood Advisory', ['get', 'event']], '#4ade80', // NWS Green
+            ['in', 'Marine', ['get', 'event']], '#FFA500',
+            ['in', 'Statement', ['get', 'event']], '#D2B48C',
+            '#FFFFFF'
+        ],
+        // Start with standard opacity
+        'fill-opacity': 0.25 
+    }
+}, 'radar');
+
+    // 3. Add Border Layer (ABOVE everything)
+    map.addLayer({
+        id: 'warnings-border',
+        type: 'line',
+        source: 'nws-warnings',
+        layout: { 'visibility': 'none' },
+paint: {
+    'line-color': [
+        'case',
+        ['in', 'Tornado', ['get', 'event']], '#FF0000',
+        ['in', 'Severe Thunderstorm', ['get', 'event']], '#FFFF00',
+        ['in', 'Flash Flood', ['get', 'event']], '#00FF00',
+        ['in', 'Flood Advisory', ['get', 'event']], '#4ade80', // NWS Green
+        ['in', 'Marine', ['get', 'event']], '#FFA500',
+        ['in', 'Statement', ['get', 'event']], '#D2B48C',
+        '#FFFFFF'
+    ],
+    'line-width': 7,
+    'line-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false], 1, // Highlighted
+        0.1 // Dimmed
+    ]
+        }
+    });
+
+    map.on('zoomend', () => {
+        if (lastETALine) {
+            drawETAs(lastETALine);
+        }
+    });
+
+    map.addSource('counties', {
+  type: 'geojson',
+  data: 'https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer/2/query?where=1=1&outFields=*&geometryType=esriGeometryEnvelope&f=geojson'
+});
+map.addLayer({
+  id: 'county-lines',
+  type: 'line',
+  source: 'counties',
+      minzoom: 7,
+
+  paint: {
+    'line-color': '#ffffff',
+    'line-width': 2
+  }
+});
+
+
+
+map.addLayer({
+    id: 'boundary-counties',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Boundary line',
+
+    filter: ['==', ['get', '_symbol'], 2],
+
+    minzoom: 0,
+
+    paint: {
+        'line-color': '#ffffff',
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 2,
+            4, 2,
+            6, 2,
+            10, 2.5,
+            14, 2.5
+        ]
+    }
+});
+    map.addSource('states', {
+  type: 'geojson',
+  data: 'https://mapservices.weather.noaa.gov/static/rest/services/nws_reference_maps/nws_reference_map/MapServer/3/query?where=1=1&outFields=*&geometryType=esriGeometryEnvelope&f=geojson'
+});
+map.addLayer({
+  id: 'state-lines',
+  type: 'line',
+  source: 'states',
+  paint: {
+    'line-color': '#ffffff',
+    'line-width': 3
+  }
+});
+
+map.addLayer({
+    id: 'boundary-states',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Boundary line',
+
+    filter: ['==', ['get', '_symbol'], 1],
+
+    minzoom: 0,
+
+    paint: {
+        'line-color': '#ffffff',
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 4,
+            4, 4,
+            6, 4,
+            10, 4.5,
+            14, 4.5
+        ]
+    }
+});
+
+ // ======================================
+// 4. Add Roads (Middle - Above Radar)
+// ======================================
+
+
+// ======================================
+// LOCAL ROADS
+// ======================================
+
+map.addLayer({
+    id: 'roads-local',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['>=', ['get', '_symbol'], 5]
+    ],
+
+    paint: {
+        'line-color': '#6b7280',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            7, 0.4,
+            10, 1,
+            14, 2
+        ],
+
+        'line-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            7, 0,
+            9, 0.7
+        ]
+    }
+});
+
+
+// ======================================
+// STATE HIGHWAYS
+// ======================================
+
+map.addLayer({
+    id: 'roads-state',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['in', ['get', '_symbol'], ['literal', [4,5]]]
+    ],
+
+    minzoom: 11,
+
+    paint: {
+
+        // outline
+        'line-color': '#ffffff',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11, 1.5,
+            14, 6
+        ],
+
+        'line-opacity': 0.95
+    }
+});
+
+map.addLayer({
+    id: 'roads-state-inner',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['in', ['get', '_symbol'], ['literal', [4,5]]]
+    ],
+
+    minzoom: 11,
+
+    paint: {
+
+        'line-color': '#cbd5e1',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11, 1,
+            14, 4
+        ],
+
+        'line-opacity': 1
+    }
+});
+
+
+// ======================================
+// US HIGHWAYS
+// ======================================
+
+map.addLayer({
+    id: 'roads-us-outline',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['in', ['get', '_symbol'], ['literal', [1,2,3]]]
+    ],
+
+    minzoom: 6,
+
+    paint: {
+
+        'line-color': '#000000',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            6, 2,
+            10, 5,
+            14, 9
+        ]
+    }
+});
+
+map.addLayer({
+    id: 'roads-us',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['in', ['get', '_symbol'], ['literal', [1,2,3]]]
+    ],
+
+    minzoom: 6,
+
+    paint: {
+
+        'line-color': '#bcb49a',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            6, 1,
+            10, 3.5,
+            14, 7
+        ]
+    }
+});
+
+
+// ======================================
+// INTERSTATES / FREEWAYS
+// ======================================
+
+map.addLayer({
+    id: 'roads-interstate-outline',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['in', ['get', '_symbol'], ['literal', [0]]]
+    ],
+
+    paint: {
+
+        'line-color': '#ffffff',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            5, 3,
+            10, 8,
+            14, 14
+        ]
+    }
+});
+
+map.addLayer({
+    id: 'roads-interstate',
+    type: 'line',
+    source: 'esri-base',
+    'source-layer': 'Road',
+
+    filter: [
+        'all',
+        ['in', ['get', '_symbol'], ['literal', [0]]]
+    ],
+
+    paint: {
+
+        // navy interstate fill
+        'line-color': '#1e3a8a',
+
+        'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            5, 1.8,
+            10, 5,
+            14, 10
+        ]
+    }
+});
+
+
+map.addLayer({
+    id: 'road-shields',
+    type: 'symbol',
+    source: 'esri-base',
+    'source-layer': 'Road/label',
+    layout: {
+        'icon-image': [
+            'case',
+            ['==', ['get', '_name'], 'I-4'], 'i-4',
+            ['==', ['get', '_name'], 'I-75'], 'i-75',
+            ['==', ['get', '_name'], 'I-95'], 'i-95',
+            ['==', ['get', '_name'], 'FL-417'], 'us-417',
+            ['==', ['get', '_name'], 'FL-429'], 'us-429',
+            ['==', ['get', '_name'], 'FL-528'], 'us-528',
+            ['==', ['get', '_name'], 'FL-91'], 'fltpk',
+            ''
+        ],
+        'symbol-placement': 'line',
+        'symbol-spacing':800,
+        
+        // --- THE FIX FOR OPPOSING LANES ---
+        'icon-allow-overlap': false,
+        'icon-ignore-placement': false,
+        'symbol-avoid-edges': true, 
+        
+        // This property helps merge labels for multi-lane highways
+        // it tells the map to be less strict about exactly which lane it sits on
+        'text-allow-overlap': false, 
+        'icon-padding':30, // Creates a larger "no-go" zone so SB won't draw if NB did
+                'icon-rotation-alignment': 'viewport',
+        'icon-pitch-alignment': 'viewport'
+    }
+});
+
+    map.addSource('storm',{
+
+        type:'geojson',
+
+        data:{
+            type:'FeatureCollection',
+            features:[]
+        }
+
+    });
+
+
+
+map.addLayer({
+        id: 'cone',
+        type: 'fill',
+        source: 'storm',
+        filter: ['==', '$type', 'Polygon'],
+        paint: {
+            // This is the dynamic part! 
+            // It picks color based on the 'intensity' we send from drawCone
+            'fill-color': [
+                'interpolate',
+                ['linear'],
+                ['get', 'intensity'],
+                0, '#ff4444',   // Red when the storm is "short"
+                70, '#ffa500',  // Orange at mid-range
+                150, '#ffff00'  // Yellow when dragged far
+            ],
+            'fill-opacity': [
+                'interpolate',
+                ['linear'],
+                ['get', 'intensity'],
+                0, 0.8,         // More solid when small
+                150, 0.4        // Very faint when long
+            ]
+        }
+    });
+
+    map.addLayer({
+        id: 'outline',
+        type: 'line',
+        source: 'storm',
+        filter: ['==', '$type', 'Polygon'],
+        paint: {
+            'line-color': '#ffffff',
+            'line-width': 2,
+            'line-opacity': [
+                'interpolate',
+                ['linear'],
+                ['get', 'intensity'],
+                0, 0.8,
+                150, 0.5
+            ]
+        }
+    });
+
+    // map.addLayer({
+
+    //     id:'track',
+
+    //     type:'line',
+
+    //     source:'storm',
+
+    //     filter:['==','$type','LineString'],
+
+    //     paint:{
+    //         'line-color':'white',
+    //         'line-width':2.5,
+    //         'line-dasharray':[2,1]
+    //     }
+
+    // });
+
+    map.addLayer({
+    id: 'track',
+    type: 'line',
+    source: 'storm',
+    filter: ['==','$type','LineString'],
+    paint:{
+        'line-color':'#ffffff',
+        'line-width':2.5,
+        'line-opacity':0.9
+    }
+});
+
+map.addLayer({
+    id: 'tick-lines',
+    type: 'line',
+    source: 'storm',
+    filter: ['==', '$type', 'LineString'],
+    paint: {
+        'line-color': '#ffffff',
+        'line-width': 1,
+        'line-opacity': 0.7
+    }
+});
+
+map.addLayer({
+    id: 'draw-lines',
+    type: 'line',
+    source: 'drawings',
+
+    filter: ['==', ['get', 'kind'], 'draw'],
+
+    layout: {
+        'line-cap': 'round',
+        'line-join': 'round'
+    },
+
+    paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['get', 'width'],
+        'line-opacity': 1
+    }
+});
+
+    // Default: Disable dragPan because starting in Cone Mode
+    //map.dragPan.disable();
+
+        loadPOIs();
+        updateCardVisibility();
+});
+
+/* =========================================
+   MODE BUTTONS
+========================================= */
+
+function shouldShowWidth() {
+    const source = map.getSource('storm');
+    if (!source || !source._data) return false;
+    
+    const data = source._data;
+    
+    // 1. If we are in Manual Mode, ALWAYS hide the width slider
+    if (mode === 'manual') return false;
+
+    // 2. Check if there is a Polygon on the map
+    const features = data.features || [];
+    const hasPolygon = features.some(f => f.geometry.type === 'Polygon');
+    
+    // 3. Only show if we are in Cone Mode OR a Polygon exists and we aren't in Manual Mode
+    // We also check stormLine length: Manual tracks have stormLine.length > 0
+    const isManualTrack = stormLine.length > 1;
+
+    return (mode === 'cone') || (hasPolygon && !isManualTrack);
+}
+
+function updateWidthVisibility() {
+    const widthContainer = document.getElementById('widthContainer');
+    if (shouldShowWidth()) {
+        widthContainer.style.setProperty('display', 'flex', 'important');
+    } else {
+        widthContainer.style.setProperty('display', 'none', 'important');
+    }
+}
+
+panBtn.onclick = () => setMode('pan');
+coneBtn.onclick = () => setMode('cone');
+manualBtn.onclick = () => setMode('manual');
+drawBtn.onclick = () => setMode('draw');
+clearBtn.onclick = () => setMode('clearTrack');
+eraseBtn.onclick = () => setMode('erase');
+spotBtn.onclick = () => setMode('spotlight');
+
+const buttons = {
+    pan: panBtn,
+    cone: coneBtn,
+    manual: manualBtn,
+    draw: drawBtn,
+    erase: eraseBtn,
+    spot: spotBtn 
+};
+
+function setMode(nextMode) {
+    mode = nextMode;
+
+    // Remove 'active' state from all buttons
+    Object.values(buttons).forEach(b => b.classList.remove('active'));
+
+    // Select the map canvas container to manipulate the cursor
+    const canvas = map.getCanvasContainer();
+    
+    // Reset defaults: disable dragging and remove custom cursor classes
+    map.dragPan.disable();
+    canvas.classList.remove('cursor-crosshair');
+
+    switch (nextMode) {
+
+        case 'pan':
+            map.dragPan.enable();
+            canvas.style.cursor = 'grab';
+            updateWidthVisibility();
+            buttons.pan.classList.add('active');
+            document.getElementById('help').innerHTML =
+                "PAN MODE:<br>CLICK + DRAG TO MOVE MAP";
+            break;
+
+        case 'cone':
+            canvas.classList.add('cursor-crosshair'); // Change cursor to +
+            updateWidthVisibility();
+            buttons.cone.classList.add('active');
+            document.getElementById('help').innerHTML =
+                "CONE MODE:<br>CLICK + DRAG TO TRACK";
+            break;
+
+        case 'manual':
+            canvas.classList.add('cursor-crosshair'); // Change cursor to +
+            updateWidthVisibility();
+            buttons.manual.classList.add('active');
+            document.getElementById('help').innerHTML =
+                "LINE TRACK MODE:<br>1. DRAG TO DRAW EDGE<br>2. MOVE TO PROJECT<br>3. CLICK TO LOCK";
+            break;
+
+        case 'draw':
+            canvas.classList.add('cursor-crosshair'); // Change cursor to +
+            buttons.draw.classList.add('active');
+            document.getElementById('help').innerHTML =
+                "DRAW MODE:<br>CLICK + DRAG TO DRAW";
+            break;
+
+        case 'spotlight':
+            canvas.classList.add('cursor-crosshair');
+            buttons.spot.classList.add('active');
+            document.getElementById('help').innerHTML =
+                "SPOTLIGHT MODE:<br>CLICK + DRAG TO HIGHLIGHT AN AREA";
+            break;
+
+        case 'clearTrack':
+            clearStorm(); 
+            etaLabels.forEach(m => m.remove());
+            etaLabels = [];
+            document.getElementById('impacts').innerHTML = '';
+            startPoint = null;
+            edgeLocked = false;
+            lockedProjection = null;
+            window.currentEndPoint = null;
+            applyWarningIsolation();
+            // Snap back to Pan mode automatically
+            setMode('pan');
+            document.getElementById('help').innerHTML = "TRACKS CLEARED";
+            break;
+
+        case 'erase':
+            drawings = [];
+            redrawDrawings();
+            document.getElementById('help').innerHTML = "ALL DRAWINGS CLEARED";
+            applyWarningIsolation();
+            // Snap back to Pan mode after a brief delay
+            setTimeout(() => {
+                setMode('pan');
+            }, 1000);
+            break;
+    }
+    updateCardVisibility();
+}
+
+function clearStorm() {
+    map.getSource('storm').setData({
+        type: 'FeatureCollection',
+        features: []
+    });
+    document.getElementById('mph').innerText = '0 MPH';
+    stormLine = [];
+    startPoint = null;
+    edgeLocked = false;
+    lockedProjection = null;
+    window.currentEndPoint = null;
+    ignoredCities = [];
+    // Trigger the UI refresh
+    applyWarningIsolation();
+    updateCardVisibility();
+}
+/* =========================================
+   MOUSEDOWN
+========================================= */
+map.on('mousedown', (e) => {
+    if (mode === 'pan') return;
+
+    // Check if we are clicking on a warning
+    const features = map.queryRenderedFeatures(e.point, { layers: ['warnings-shading'] });
+
+    // ONLY reset if we clicked empty space. 
+    // If we clicked a warning, DO NOT touch isolatedWarningId here; 
+    // let the 'click' handler below manage the ID swap.
+    if (features.length === 0) {
+        isolatedWarningId = null;
+    }
+    
+    // Manage drawing/tracking states
+    if ((mode === 'cone' && !dragging) || (mode === 'manual' && !dragging && !edgeLocked)) {
+        clearStorm();
+    }
+    
+    map.dragPan.disable();
+
+    if (mode === 'draw') {
+        currentDrawing = [[e.lngLat.lng, e.lngLat.lat]];
+        dragging = true;
+    }
+
+    if (mode === 'cone') {
+        dragging = true;
+        startPoint = [e.lngLat.lng, e.lngLat.lat];
+    }
+
+    if (mode === 'manual') {
+        if (!edgeLocked) {
+            stormLine = [[e.lngLat.lng, e.lngLat.lat]];
+            dragging = true;
+        } else {
+            edgeLocked = false;
+            lockedProjection = null;
+            setMode('pan');
+        }
+    }
+
+    if (mode === 'spotlight') {
+    currentDrawing = [[e.lngLat.lng, e.lngLat.lat]];
+    dragging = true;
+}
+    
+    applyWarningIsolation();
+});
+
+/* =========================================
+   MOUSEUP
+========================================= */
+
+window.addEventListener('mouseup', (e) => {
+    if (mode === 'pan') return;
+
+if(mode === 'draw' && dragging){
+    dragging = false;
+
+    // Only save if there's enough data to make a line
+    if (currentDrawing.length > 1) {
+        const rawLine = turf.lineString(currentDrawing);
+        const smoothLine = turf.bezierSpline(rawLine, { sharpness: 0.7 });
+        const id = crypto.randomUUID();
+
+        drawings.push({
+            type: 'Feature',
+            id: id, // Top-level ID for the eraser
+            properties: {
+                id: id,
+                kind: 'draw',
+                color: drawColor,
+                width: drawWidth
+            },
+            geometry: smoothLine.geometry
+        });
+    }
+
+    // CRITICAL FIX: Clear the raw mouse path so it stops rendering
+    currentDrawing = []; 
+    redrawDrawings();
+    return;
+}
+
+    // Don't trigger auto-pan if clicking UI elements
+    if (e.target.closest('.toolbar') || e.target.closest('.ui-card') || e.target.closest('.dur-btn')) {
+        dragging = false;
+        return;
+    }
+
+    if (mode === 'cone' && dragging) {
+        dragging = false;       
+        setMode('pan');
+    }
+
+    if (mode === 'manual' && dragging) {
+        dragging = false;
+        edgeLocked = true; // Now the user can move the mouse to project
+    }
+    if (mode === 'spotlight' && dragging) {
+        dragging = false;
+        if (currentDrawing.length > 3) {
+            // 1. Close the loop
+            let coords = [...currentDrawing, currentDrawing[0]];
+            let line = turf.lineString(coords);
+
+            // 2. Remove "mouse jitter" (Tolerance: higher = smoother/simpler)
+            let simplified = turf.simplify(line, { tolerance: 0.01, highQuality: true });
+
+            // 3. Apply the curve with high resolution
+            // Sharpness 0.85 provides a very organic, rounded feel
+            let smoothed = turf.bezierSpline(simplified, { 
+                sharpness: 0.85,
+                resolution: 12000 // Adds more points for a silkier look
+            });
+            
+            const world = [[-180, 85], [180, 85], [180, -85], [-180, -85], [-180, 85]];
+            const hole = smoothed.geometry.coordinates;
+
+            const id = crypto.randomUUID();
+            drawings.push({
+                type: 'Feature',
+                id: id,
+                properties: { id: id, kind: 'spotlight' },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [world, hole]
+                }
+            });
+        }
+        currentDrawing = []; 
+        redrawDrawings();
+        setMode('pan');
+    }
+});
+
+/* =========================================
+   MOUSEMOVE
+========================================= */
+
+map.on('mousemove', (e) => {
+
+    if(mode === 'draw' && dragging){
+
+    currentDrawing.push([
+        e.lngLat.lng,
+        e.lngLat.lat
+    ]);
+
+    redrawDrawings();
+
+    return;
+}
+    if (mode === 'pan') return;
+    const mouse = [e.lngLat.lng, e.lngLat.lat];
+
+if (mode === 'cone') {
+    if (!dragging || !startPoint) return;
+
+    // 1. Calculate ACTUAL distance from start to mouse (in miles)
+    const visualDistance = turf.distance(startPoint, mouse, { units: 'miles' });
+    const hours = selectedDuration / 60;
+
+    // 2. Derive speed: Speed = Distance / Time
+    const speedMPH = visualDistance / hours;
+
+    // 3. The end point IS the mouse position now
+    window.currentEndPoint = mouse; 
+    drawCone(startPoint, mouse, speedMPH);
+}
+
+if (mode === 'manual') {
+        if (dragging) {
+            const last = stormLine[stormLine.length - 1];
+            const dist = turf.distance(last, mouse, { units: 'miles' });
+            // Only add points if moved significantly to keep performance high
+            if (dist > 0.2) {
+                stormLine.push(mouse);
+                drawEdgeOnly();
+            }
+        }
+        // This is the part that projects the box while you move your mouse
+        if (edgeLocked) {
+            window.currentEndPoint = mouse; // Store this for duration changes
+            drawProjectedTracker(mouse);
+        }
+    }
+
+    if ((mode === 'draw' || mode === 'spotlight') && dragging) {
+    currentDrawing.push([e.lngLat.lng, e.lngLat.lat]);
+    redrawDrawings();
+    return;
+}
+});
+
+
+
+
+
+/* =========================================
+   DRAW EDGE ONLY
+========================================= */
+
+function drawEdgeOnly(){
+
+    const edgeLine = turf.lineString(
+        stormLine
+    );
+
+    map.getSource('storm').setData({
+
+        type:'FeatureCollection',
+
+        features:[
+            edgeLine
+        ]
+
+    });
+
+}
+
+function redrawDrawings(){
+    // Map the drawings array to GeoJSON features
+    const features = drawings.map(d => ({
+        type: 'Feature',
+        // CRITICAL: The ID must be at the top level of the feature, 
+        // not just inside properties, so the erase tool can find it.
+        id: d.id, 
+        properties: d.properties,
+        geometry: d.geometry
+    }));
+
+    // If the user is currently dragging/drawing, add the active line as a temporary feature
+if (currentDrawing.length > 1) {
+    let tempCoords = currentDrawing;
+    let tempGeometry;
+
+    // If we have enough points, smooth the preview line
+    if (currentDrawing.length > 3) {
+        try {
+            const rawLine = turf.lineString(currentDrawing);
+            // We use a slightly lower resolution (1000) for the preview 
+            // to maintain performance while moving the mouse
+            const smoothed = turf.bezierSpline(rawLine, { 
+                sharpness: 0.85, 
+                resolution: 1500 
+            });
+            tempGeometry = smoothed.geometry;
+        } catch (e) {
+            // Fallback to raw line if spline fails
+            tempGeometry = { type: 'LineString', coordinates: currentDrawing };
+        }
+    } else {
+        tempGeometry = { type: 'LineString', coordinates: currentDrawing };
+    }
+
+    features.push({
+        type: 'Feature',
+        properties: {
+            kind: mode === 'spotlight' ? 'draw' : 'draw', // Keeps it visible during draw
+            color: mode === 'spotlight' ? '#ffffff' : drawColor, // White guide for spotlight
+            width: mode === 'spotlight' ? 2 : drawWidth
+        },
+        geometry: tempGeometry
+    });
+}
+
+    // Sync the data to the map source
+    map.getSource('drawings').setData({
+        type: 'FeatureCollection',
+        features
+    });
+}
+
+/* =========================================
+   PROJECTED TRACKER
+========================================= */
+
+
+function drawProjectedTracker(mouse) {
+if (stormLine.length < 2) return;
+
+    const edgeLine = turf.lineString(stormLine);
+    const edgeLen = turf.length(edgeLine, { units: 'miles' });
+    const centerPoint = turf.along(edgeLine, edgeLen / 2, { units: 'miles' });
+    const center = centerPoint.geometry.coordinates;
+
+    // 1. Distance from edge to mouse
+    const visualLength = turf.distance(center, mouse, { units: 'miles' });
+    const bearing = turf.bearing(center, mouse);
+
+    // 2. Derive speed based on duration
+    const hours = selectedDuration / 60;
+    const speedMPH = visualLength / hours; 
+    staticStormVector = {
+        bearing: bearing,
+        upstream: turf.lineString(stormLine),
+        speed: speedMPH
+    };  
+    document.getElementById('mph').innerText = Math.round(speedMPH) + ' MPH';
+
+
+
+    // 3. Project the box points based on the selected duration
+    const projectedCoords = [];
+    stormLine.forEach(pt => {
+        const projected = turf.destination(pt, visualLength, bearing, { units: 'miles' });
+        projectedCoords.push(projected.geometry.coordinates);
+    });
+
+    const polygonCoords = [
+        ...stormLine,
+        ...[...projectedCoords].reverse(),
+        stormLine[0]
+    ];
+
+    // Use visualLength for 'intensity' so the color updates with the duration
+    const trackPolygon = turf.polygon([polygonCoords], { intensity: visualLength });
+
+    // 4. Center Line for ETA logic: 
+    // This represents the center path of the storm
+    const centerEnd = turf.destination(center, visualLength, bearing, { units: 'miles' });
+    const speedLine = turf.lineString([center, centerEnd.geometry.coordinates]);
+
+    const tickLines = buildTickLines(speedLine.geometry.coordinates, speedMPH, selectedDuration);
+
+const features = [trackPolygon, edgeLine, speedLine, ...tickLines]
+    .filter(f =>
+        f &&
+        f.geometry &&
+        f.geometry.coordinates &&
+        Array.isArray(f.geometry.coordinates)
+    );
+
+    applyWarningIsolation();
+
+map.getSource('storm').setData({
+    type: 'FeatureCollection',
+    features
+});
+
+
+
+    // Pass the projected speedLine to update TOAs for cities inside this box
+    drawETAs(speedLine);
+}
+
+/* =========================================
+   STANDARD CONE
+========================================= */
+
+// Change the parameter from 'width' to use our global 'coneWidth'
+function drawCone(start, end, speedMPH) { 
+    // The intensity (color) and speed should be based on the speedMPH (the mouse),
+    // while the geometry is based on the 'end' point (the duration).
+    const visualDist = turf.distance(start, end, {units: 'miles'});
+
+    document.getElementById('mph').innerText = Math.round(speedMPH) + ' MPH';
+
+    const currentWidth = coneWidth; 
+const bearing = turf.bearing(start, end);
+const line = turf.lineString([start, end]);
+const dist = turf.length(line, { units: 'miles' });
+
+// --- NEW: LOCK THE STATIC VECTOR HERE ---
+    // We create a fixed perpendicular line (upstream) to use for ETAs
+    const p1 = turf.destination(start, 50, bearing + 90, {units:'miles'});
+    const p2 = turf.destination(start, 50, bearing - 90, {units:'miles'});
+    
+    staticStormVector = {
+        bearing: bearing,
+        upstream: turf.lineString([p1.geometry.coordinates, p2.geometry.coordinates]),
+        speed: speedMPH
+    };
+
+// center the bulb slightly BEFORE the endpoint (critical fix)
+const bulbCenter = turf.along(line, dist * 0.85, { units: 'miles' });
+
+// fan scaling (keeps short tracks tight but allows spread)
+const scale = Math.min(dist / 120, 1);
+
+// base widths
+const rearWidth = coneWidth * 0.05;
+const frontRadius = coneWidth * 0.9 * scale;
+
+// rear anchors (straight sides start here)
+const pL = turf.destination(start, rearWidth, bearing + 90, { units: 'miles' });
+const pR = turf.destination(start, rearWidth, bearing - 90, { units: 'miles' });
+
+// build symmetric bulb around CENTER (not end)
+const arcSteps = 20;
+const arc = [];
+
+for (let i = 0; i <= arcSteps; i++) {
+    const t = i / arcSteps;
+
+    const angle = bearing + 90 - (180 * t);
+
+    const pt = turf.destination(
+        bulbCenter.geometry.coordinates,
+        frontRadius,
+        angle,
+        { units: 'miles' }
+    );
+
+    arc.push(pt.geometry.coordinates);
+}
+
+// construct polygon
+const cone = turf.polygon([[
+    pL.geometry.coordinates,
+    ...arc,
+    pR.geometry.coordinates,
+    pL.geometry.coordinates
+]], {
+    intensity: speedMPH
+});
+
+    // The line we send to drawETAs MUST represent the SPEED (the mouse)
+const speedLine = turf.lineString([start, end]);    const visualLine = turf.lineString([start, end]);
+
+const tickLines = buildTickLines([start, end], speedMPH, selectedDuration);
+applyWarningIsolation();
+map.getSource('storm').setData({
+    type: 'FeatureCollection',
+    features: [cone, visualLine, ...tickLines]
+});
+
+    drawETAs(speedLine); 
+}
+
+function buildTickLines(line, speedMPH, durationMins) {
+    if (!Array.isArray(line) || line.length < 2 || !isFinite(speedMPH) || speedMPH <= 0) {
+        return [];
+    }
+    const hours = durationMins / 60;
+    const totalMiles = speedMPH * hours;
+
+    // spacing rules
+    const stepMins = durationMins === 120 ? 30 : 15;
+    const stepMiles = speedMPH * (stepMins / 60);
+
+    const ticks = [];
+
+    const turfLine = turf.lineString(line);
+
+    for (let d = stepMiles; d < totalMiles; d += stepMiles) {
+
+        const pt = turf.along(turfLine, d, { units: 'miles' });
+        const ahead = turf.along(turfLine, d + 0.01, { units: 'miles' });
+
+        const bearing = turf.bearing(pt, ahead);
+
+        const tickLen = 0.8; // miles (visual width of tick)
+
+        const left = turf.destination(pt, tickLen, bearing - 90, { units: 'miles' });
+        const right = turf.destination(pt, tickLen, bearing + 90, { units: 'miles' });
+
+        ticks.push({
+            type: "Feature",
+            geometry: {
+                type: "LineString",
+                coordinates: [
+                    left.geometry.coordinates,
+                    right.geometry.coordinates
+                ]
+            }
+        });
+    }
+
+    return ticks;
+}
+
+/* =========================================
+   ETA BOXES & DATA LOAD
+========================================= */
+
+function drawETAs(line) {
+    if (!flCitiesGeo || !staticStormVector) return;
+    
+    // Save reference for re-renders (like removing a city)
+    lastETALine = line; 
+    
+    // UI Cleanup
+    etaLabels.forEach(m => m.remove());
+    etaLabels = [];
+    document.getElementById('impacts').innerHTML = '';
+
+    const stormSource = map.getSource('storm');
+    if (!stormSource || !stormSource._data || !stormSource._data.features.length) return;
+    const polygon = stormSource._data.features.find(f => f.geometry.type === 'Polygon');
+    if (!polygon) return;
+
+    // Use the LOCKED values
+    const { bearing, upstream, speed } = staticStormVector;
+
+    const allImpacted = flCitiesGeo
+        .filter(pt => {
+            const isInside = turf.booleanPointInPolygon(pt, polygon);
+            const isIgnored = ignoredCities.includes(pt.properties.name);
+            return isInside && !isIgnored;
+        })
+        .map(pt => {
+            // Project ray using the STATIC bearing
+            const backRayEnd = turf.destination(pt.geometry.coordinates, 500, bearing + 180, {units:'miles'});
+            const backRay = turf.lineString([pt.geometry.coordinates, backRayEnd.geometry.coordinates]);
+            
+            const intersect = turf.lineIntersect(backRay, upstream);
+            
+            let distMiles;
+            if (intersect.features.length > 0) {
+                distMiles = turf.distance(pt.geometry.coordinates, intersect.features[0], {units:'miles'});
+            } else {
+                // Last resort fallback
+                const snapped = turf.nearestPointOnLine(upstream, pt.geometry.coordinates);
+                distMiles = turf.distance(pt.geometry.coordinates, snapped, {units:'miles'});
+            }
+
+            const hoursToImpact = distMiles / speed;
+            const arrivalTimestamp = Date.now() + (hoursToImpact * 3600000);
+
+            return {
+                ...pt,
+                properties: {
+                    ...pt.properties,
+                    distToImpact: distMiles,
+                    arrivalTime: new Date(arrivalTimestamp)
+                }
+            };
+        });
+
+    if (allImpacted.length === 0) return;
+
+    // --- RENDER SIDEBAR ---
+    const sidebarCities = [...allImpacted].sort((a, b) => a.properties.distToImpact - b.properties.distToImpact).slice(0, 15);
+    sidebarCities.forEach(city => {
+        const timeStr = city.properties.arrivalTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+        const row = document.createElement('div');
+        row.className = 'city-row';
+        row.innerHTML = `<div>${city.properties.name}<span class="remove-trigger" onclick="event.stopPropagation(); ignoredCities.push('${city.properties.name}'); drawETAs(lastETALine);">REMOVE</span></div><b style="color:var(--accent)">${timeStr}</b>`;
+        document.getElementById('impacts').appendChild(row);
+    });
+
+    // --- RENDER MAP MARKERS ---
+    const mapPrioritized = [...allImpacted].sort((a, b) => (b.properties.priority || 0) - (a.properties.priority || 0));
+    const zoom = map.getZoom();
+    const maxLabels = zoom < 7.5 ? 10 : zoom < 9 ? 20 : 40;
+    const placedRects = [];
+
+mapPrioritized.forEach(city => {
+    const pos = map.project(city.geometry.coordinates);
+    
+    // Skip if off-screen
+    if (pos.x < 0 || pos.y < 0 || pos.x > map.getCanvas().width || pos.y > map.getCanvas().height) return;
+
+    // Define the buffer/padding around the label
+    const buffer = 10; 
+    const estWidth = (city.properties.name.length * 9) + 40;
+
+    // Construct the collision rectangle using the buffer
+    const currentRect = { 
+        left: pos.x - (estWidth / 2) - buffer, 
+        right: pos.x + (estWidth / 2) + buffer, 
+        top: pos.y - 25 - buffer, 
+        bottom: pos.y + 25 + buffer 
+    };
+
+    // Check for overlaps with existing labels
+    const hasOverlap = placedRects.some(r => {
+        return !(currentRect.right < r.left || 
+                 currentRect.left > r.right || 
+                 currentRect.bottom < r.top || 
+                 currentRect.top > r.bottom);
+    });
+
+    if (!hasOverlap && etaLabels.length < maxLabels) {
+        const timeStr = city.properties.arrivalTime.toLocaleTimeString([], { 
+            hour: 'numeric', 
+            minute: '2-digit' 
+        }).toLowerCase();
+
+        const el = document.createElement('div');
+        el.className = 'eta-box';
+        el.innerHTML = `${city.properties.name}<span>${timeStr}</span>`;
+
+        const marker = new maplibregl.Marker({ element: el })
+            .setLngLat(city.geometry.coordinates)
+            .addTo(map);
+
+        etaLabels.push(marker);
+        placedRects.push(currentRect);
+    }
+});
+}
+
+
+/* =========================================
+   DRAGGABLE UI LOGIC
+========================================= */
+const card = document.getElementById('draggableCard');
+const handle = document.getElementById('dragHandle');
+
+let isDraggingUI = false;
+let offset = { x: 0, y: 0 };
+
+handle.onmousedown = (e) => {
+    isDraggingUI = true;
+    offset.x = e.clientX - card.offsetLeft;
+    offset.y = e.clientY - card.offsetTop;
+    card.style.bottom = 'auto'; 
+};
+
+window.addEventListener('mousemove', (e) => {
+    if (!isDraggingUI) return;
+    card.style.left = (e.clientX - offset.x) + 'px';
+    card.style.top = (e.clientY - offset.y) + 'px';
+});
+
+window.addEventListener('mouseup', () => {
+    isDraggingUI = false;
+});
+
+document.getElementById('exportBtn').onclick = () => {
+    const vf = document.getElementById('exportViewfinder');
+    const ui = document.getElementById('exportUI');
+    const card = document.getElementById('draggableCard');
+    const txtBox = document.getElementById('customTextBox');
+    
+    // Final Output Configuration
+    const totalW = 1350;
+    const totalH = 759;
+    const bannerH = 120;
+    const mapH = totalH - bannerH;
+
+    // 1. Enter Preview Mode
+    document.querySelector('.toolbar').style.display = 'none';
+    document.getElementById('help').style.display = 'none';
+    card.style.setProperty('display', 'none', 'important');    
+    vf.style.display = 'block';
+    ui.style.display = 'flex';
+
+    // Format Timestamp: No leading zeros, lowercase am/pm
+    const now = new Date();
+    // Timestamp: No leading zeros, no seconds, with Time Zone
+    const ts = new Date().toLocaleString([], { 
+        weekday: 'short', month: 'short', day: 'numeric', 
+        year: 'numeric', hour: 'numeric', minute: '2-digit', 
+        timeZoneName: 'short' 
+    });
+    document.getElementById('previewTS').innerText = "Created: " + ts;
+    
+    setMode('pan');
+
+    if (card) {
+        card.style.setProperty('display', 'none', 'important');
+    }
+
+    // --- CANCEL LOGIC ---
+    document.getElementById('cancelExport').onclick = () => {
+        vf.style.display = 'none';
+        ui.style.display = 'none';
+        document.querySelector('.toolbar').style.display = 'flex';
+        document.getElementById('help').style.display = 'block';
+        card.style.display = 'block';
+        if (document.getElementById('textControls')) {
+            document.getElementById('textControls').style.display = 'flex';
+            document.getElementById('textDragHandle').style.display = 'flex';
+        }
+    };
+
+ document.getElementById('confirmExport').onclick = async () => {
+    ui.style.display = 'none';
+
+    // Prepare Text Box for clean capture
+    let originalMinWidth, originalWidth;
+    const textControls = document.getElementById('textControls');
+    const textHandle = document.getElementById('textDragHandle');
+
+    if (txtBox.style.display !== 'none') {
+        textControls.style.display = 'none';
+        textHandle.style.display = 'none';
+        originalMinWidth = txtBox.style.minWidth;
+        originalWidth = txtBox.style.width;
+        txtBox.style.minWidth = 'auto';
+        txtBox.style.width = 'fit-content';
+    }
+
+    const rect = vf.getBoundingClientRect();
+    const mapAreaTop = rect.top + bannerH;
+
+    // --- 2X RESOLUTION LOGIC ---
+    const exportScale = 2;
+    const finalW = totalW * exportScale;
+    const finalH = totalH * exportScale;
+    const finalBannerH = bannerH * exportScale;
+
+    const final = document.createElement('canvas');
+    final.width = finalW;
+    final.height = finalH;
+    const ctx = final.getContext('2d');
+
+    // Smooth everything by scaling coordinates
+    ctx.scale(exportScale, exportScale);
+    ctx.textBaseline = "middle";
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // 1. Draw Banner Background
+    const grad = ctx.createLinearGradient(0, 0, totalW, 0);
+    grad.addColorStop(0, '#001c2b'); 
+    grad.addColorStop(1, '#002c69');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, totalW, bannerH);
+
+    // 2. Draw Header Text (Optimized weights for 2x scale)
+    const textLeftX = 30;
+    const mainTextY = 58;
+
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 4; 
+    ctx.font = "600 32px 'Roboto'"; 
+    ctx.fillStyle = '#ffffff';
+    ctx.letterSpacing = "0.5px";
+    ctx.textAlign = "left";
+    ctx.fillText('WEATHER IMPACT', textLeftX, mainTextY);
+
+    const impactWidth = ctx.measureText('WEATHER IMPACT').width;
+    const badgeX = textLeftX + impactWidth + 17;
+    const badgeWidth = 115;
+    const badgeHeight = 40;
+
+    ctx.shadowBlur = 0; 
+    ctx.fillStyle = '#a9e7ff';
+    ctx.beginPath();
+    ctx.roundRect(badgeX, mainTextY - 23, badgeWidth, badgeHeight, 6);
+    ctx.fill();
+
+    ctx.font = "900 24px 'Roboto'";
+    ctx.fillStyle = '#001c2b';
+    ctx.textAlign = "center";
+    ctx.fillText('UPDATE', badgeX + (badgeWidth / 2), mainTextY + 0);
+
+    ctx.textAlign = "left";
+    ctx.letterSpacing = "1px";
+    ctx.font = "700 13px 'Roboto'"; 
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillText("CREATED: " + ts.toUpperCase(), textLeftX, 92);
+    ctx.letterSpacing = "0px";
+
+    // 3. Draw Logo
+    const logo = new Image();
+    const logoWidth = 430;
+    const logoHeight = 100;
+    logo.crossOrigin = "anonymous";
+    logo.src = "https://www.weather.gov/images/mlb/WFOMLBlogo-w.png";
+    await new Promise(r => { logo.onload = r; logo.onerror = r; });
+    if (logo.complete) {
+        ctx.drawImage(logo, totalW - logoWidth - 30, 10, logoWidth, logoHeight);
+    }
+
+    // 4. Capture Map and Draw (Rounded math prevents sub-pixel blurring)
+    const container = map.getContainer();
+    const mapCanvas = await html2canvas(container, { 
+        useCORS: true, 
+        logging: false,
+        scale: exportScale 
+    });
+
+    const s = mapCanvas.width / window.innerWidth;
+    ctx.drawImage(
+        mapCanvas,
+        Math.round(rect.left * s), 
+        Math.round(mapAreaTop * s), 
+        Math.round(totalW * s), 
+        Math.round(mapH * s),
+        0, bannerH, totalW, mapH
+    );
+
+    // 5. Custom Text Overlay
+    if (txtBox.style.display !== 'none') {
+        const txtCanvas = await html2canvas(txtBox, { 
+            useCORS: true, 
+            backgroundColor: null,
+            scale: exportScale 
+        });
+        const tRect = txtBox.getBoundingClientRect();
+        const relX = tRect.left - rect.left;
+        const relY = (tRect.top - mapAreaTop) + bannerH;
+        ctx.drawImage(txtCanvas, relX, relY, tRect.width, tRect.height);
+        
+        textControls.style.display = 'flex';
+        textHandle.style.display = 'flex';
+    }
+
+    // 6. Output
+    try {
+        const dataUrl = final.toDataURL('image/png', 0.8);
+        const link = document.createElement('a');
+        link.download = `WeatherImpact_${Date.now()}.png`;
+        link.href = dataUrl;
+        link.click();
+
+        final.toBlob(blob => {
+            const item = new ClipboardItem({ "image/png": blob });
+            navigator.clipboard.write([item]);
+        });
+    } catch (e) { console.error("Export Error:", e); }
+
+    document.getElementById('cancelExport').onclick();
+};
+    };
+async function loadPOIs() {
+    const customCities = [
+        { name: "Orlando Intl* (Orange)", lat: 28.429444, lon: -81.308889 },
+        { name: "Apopka (Orange)", lat: 28.701, lon: -81.531 },
+        { name: "Bithlo (Orange)", lat: 28.552, lon: -81.105 },
+        { name: "Ocoee (Orange)", lat: 28.574, lon: -81.53 },
+        { name: "Winter Park (Orange)", lat: 28.596, lon: -81.346 },
+        { name: "Lake Buena Vista (Orange)", lat: 28.366, lon: -81.526 },
+        { name: "UCF (Orange)", lat: 28.589, lon: -81.197 },
+        { name: "Zellwood (Orange)", lat: 28.728, lon: -81.6 },
+        { name: "Lake Nona (Orange)", lat: 28.391, lon: -81.269 },
+        { name: "Daytona Beach* (Volusia)", lat: 29.178321, lon: -81.060861 },
+        { name: "DeLand (Volusia)", lat: 29.028, lon: -81.303 },
+        { name: "Deltona (Volusia)", lat: 28.892, lon: -81.259 },
+        { name: "Ormond Beach (Volusia)", lat: 29.284, lon: -81.056 },
+        { name: "New Smyrna Beach (Volusia)", lat: 29.025, lon: -80.927 },
+        { name: "Port Orange (Volusia)", lat: 29.117, lon: -80.999 },
+        { name: "Pierson (Volusia)", lat: 29.191, lon: -81.419 },
+        { name: "Sanford* (Seminole)", lat: 28.7760, lon: -81.2345 },
+        { name: "Oviedo (Seminole)", lat: 28.665, lon: -81.189 },
+        { name: "Altamonte Springs (Seminole)", lat: 28.66, lon: -81.393 },
+        { name: "Longwood (Seminole)", lat: 28.697, lon: -81.338 },
+        { name: "Winter Springs (Seminole)", lat: 28.695, lon: -81.306 },
+        { name: "Lake Mary (Seminole)", lat: 28.752, lon: -81.32 },
+        { name: "Geneva (Seminole)", lat: 28.733, lon: -81.113 },
+        { name: "Leesburg* (Lake)", lat: 28.8265, lon: -81.8084 },
+        { name: "Clermont (Lake)", lat: 28.56, lon: -81.776 },
+        { name: "Eustis (Lake)", lat: 28.855, lon: -81.688 },
+        { name: "Mount Dora (Lake)", lat: 28.805, lon: -81.643 },
+        { name: "Tavares (Lake)", lat: 28.81, lon: -81.728 },
+        { name: "Astor (Lake)", lat: 29.167, lon: -81.53 },
+        { name: "Altoona (Lake)", lat: 28.968, lon: -81.648 },
+        { name: "Lady Lake (Lake)", lat: 28.939, lon: -81.942 },
+        { name: "Melbourne* (Brevard)", lat: 28.10275, lon: -80.64525 },
+        { name: "Titusville (Brevard)", lat: 28.609, lon: -80.813 },
+        { name: "Cocoa (Brevard)", lat: 28.369, lon: -80.743 },
+        { name: "Palm Bay (Brevard)", lat: 28, lon: -80.67 },
+        { name: "Satellite Beach (Brevard)", lat: 28.173, lon: -80.596 },
+        { name: "Mims (Brevard)", lat: 28.668, lon: -80.847 },
+        { name: "Barefoot Bay (Brevard)", lat: 27.886, lon: -80.53 },
+        { name: "Viera - Suntree (Brevard)", lat: 28.256, lon: -80.733 },
+        { name: "Cocoa Beach (Brevard)", lat: 28.3126, lon: -80.6136 },
+        { name: "Kissimmee (Osceola)", lat: 28.292, lon: -81.412 },
+        { name: "Celebration (Osceola)", lat: 28.324, lon: -81.543 },
+        { name: "St Cloud (Osceola)", lat: 28.241, lon: -81.282 },
+        { name: "Poinciana (Osceola)", lat: 28.153, lon: -81.467 },
+        { name: "Holopaw (Osceola)", lat: 28.132, lon: -81.076 },
+        { name: "Kenansville (Osceola)", lat: 27.875, lon: -80.989 },
+        { name: "Vero Beach* (Indian River)", lat: 27.655556, lon: -80.417944 },
+        { name: "Sebastian (Indian River)", lat: 27.815, lon: -80.474 },
+        { name: "Fellsmere (Indian River)", lat: 27.763, lon: -80.602 },
+        { name: "South Beach (Indian River)", lat: 27.591, lon: -80.332 },
+        { name: "Wabasso (Indian River)", lat: 27.751, lon: -80.438 },
+        { name: "Blue Cypress Lake (Indian River)", lat: 27.725, lon: -80.776 },
+        { name: "Fort Pierce* (St. Lucie)", lat: 27.443, lon: -80.336 },
+        { name: "Port St Lucie (St. Lucie)", lat: 27.27, lon: -80.385 },
+        { name: "Tradition (St. Lucie)", lat: 27.265, lon: -80.439 },
+        { name: "White City (St. Lucie)", lat: 27.37, lon: -80.335 },
+        { name: "St Lucie Fairgrounds (St. Lucie)", lat: 27.368, lon: -80.486 },
+        { name: "Lakewood Park (St. Lucie)", lat: 27.546, lon: -80.4 },
+        { name: "Okeechobee (Okeechobee)", lat: 27.2476, lon: -80.835 },
+        { name: "Okee-Tantee (Okeechobee)", lat: 27.158, lon: -80.865 },
+        { name: "Basinger (Okeechobee)", lat: 27.398, lon: -81.016 },
+        { name: "Fort Drum (Okeechobee)", lat: 27.522, lon: -80.807 },
+        { name: "Taylor Creek (Okeechobee)", lat: 27.212, lon: -80.792 },
+        { name: "Stuart (Martin)", lat: 27.184, lon: -80.222 },
+        { name: "Indiantown (Martin)", lat: 27.028, lon: -80.478 },
+        { name: "Palm City (Martin)", lat: 27.166, lon: -80.268 },
+        { name: "Hobe Sound (Martin)", lat: 27.06, lon: -80.136 },
+        { name: "Port Salerno (Martin)", lat: 27.142, lon: -80.201 },
+        { name: "Tequesta (Martin)", lat: 26.98, lon: -80.12 },
+        { name: "Jensen Beach (Martin)", lat: 27.256, lon: -80.232 }
+    ];
+
+try {
+        const response = await fetch('https://nwsjheil.github.io/stormtracker/points.geojson');
+        const data = await response.json();
+        
+        // Use an object to store the "best" version of each city name
+        const bestLocations = {};
+
+        const cleanName = (name) => name.replace(/[*]|\s*\(.*?\)/g, "").trim();
+
+        // Helper to process and compare locations
+        const processLocation = (rawName, coords, pop) => {
+            const name = cleanName(rawName);
+            const lookupKey = name.toLowerCase();
+            
+            // Look specifically for the 2010 population variable
+            const priority = pop ? Number(pop) : 0;
+
+            if (!bestLocations[lookupKey] || priority > bestLocations[lookupKey].properties.priority) {
+                bestLocations[lookupKey] = turf.point(coords, {
+                    name: name,
+                    priority: priority // Keep the property name as 'priority' for the map layer
+                });
+            }
+        };
+
+        // Inside your data.features.forEach loop:
+        data.features.forEach(f => {
+            const rawName = f.properties.name || "Unnamed";
+            const pop = f.properties.pop_2010; // Use the correct variable here
+            processLocation(rawName, f.geometry.coordinates, pop);
+        });
+        // 1. Process external NWS Points
+        data.features.forEach(f => {
+            const rawName = f.properties.name || "Unnamed Location";
+            const pop = f.properties.population || f.properties.pop;
+            processLocation(rawName, f.geometry.coordinates, pop);
+        });
+
+        // 2. Process Custom Cities
+        customCities.forEach(city => {
+            // These usually don't have pop data, so they'll only stay 
+            // if no NWS version with pop data exists.
+            processLocation(city.name, [city.lon, city.lat], null);
+        });
+
+        // Convert the "best" object back into a feature array
+        flCitiesGeo = Object.values(bestLocations);
+
+        map.addSource('poi-cities', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: flCitiesGeo }
+        });
+
+        map.addLayer({
+            id: 'poi-labels',
+            type: 'symbol',
+            source: 'poi-cities',
+            layout: {
+                'text-field': ['get', 'name'],
+'text-size': [
+    'interpolate',
+    ['linear'],
+    ['get', 'priority'],
+    0, 15,          // No population? 12px font
+    50000, 20,      // 50k people? 18px font
+    200000, 28      // 200k+ people? 28px font
+],
+// This ensures big cities stay on top of small ones
+'symbol-sort-key': ['-', ['get', 'priority']],
+                'text-font': ['Noto Sans Bold'],
+                'symbol-sort-key': ['-', 10000000, ['coalesce', ['get', 'priority'], 0]],
+                'text-variable-anchor': ['center'], 
+                'text-padding': 2,
+                'text-ignore-placement': false,
+                'text-allow-overlap': false
+            },
+            paint: {
+                'text-color': 'rgba(250,250,250,1)',
+                'text-halo-color': 'rgba(15,23,42,1)',
+                'text-halo-width': 1.5
+            }
+        });
+
+    } catch (e) {
+        console.error("Error loading NWS GeoJSON:", e);
+    }
+}
+document.getElementById('radarSelector').onchange = (e) => {
+    const parts = e.target.value.split('|');
+    const folder = parts[0]; 
+    const layer = parts[1];  
+
+    const source = map.getSource('radar');
+    if (!source) return;
+
+    // Handle the "DATA OFF" case
+    if (folder === 'none') {
+        map.setLayoutProperty('radar', 'visibility', 'none');
+        console.log("Radar data turned off");
+        return; // Exit early
+    }
+
+    // Otherwise, ensure the layer is visible and update the URL
+    map.setLayoutProperty('radar', 'visibility', 'visible');
+
+    let url;
+    if (folder === 'sat') {
+        url = `https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLE=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`;
+    } else {
+        url = `https://opengeo.ncep.noaa.gov/geoserver/${folder}/${layer}/ows?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`;
+    }
+
+    source.setTiles([url]);
+    
+    const sourceCache = map.style.sourceCaches['radar'];
+    if (sourceCache) {
+        if (typeof sourceCache.clear === 'function') {
+            sourceCache.clear();
+        } else {
+            sourceCache._tiles = {};
+        }
+        sourceCache.update(map.transform);
+    }
+    
+    console.log(`Switched to ${layer}`);
+};
+/* =========================================
+   TEXT BOX LOGIC (V3) - FIXED
+========================================= */
+const textBtn = document.getElementById('addTextBtn');
+const customBox = document.getElementById('customTextBox');
+const textHandle = document.getElementById('textDragHandle');
+const editableText = document.getElementById('editableText');
+
+// --- THE MISSING LINK: SHOW THE BOX ---
+textBtn.onclick = () => {
+    customBox.style.display = 'block';
+    // Position it roughly in the center of the screen
+    customBox.style.top = '30%';
+    customBox.style.left = '40%';
+};
+
+// Close button logic
+document.getElementById('closeText').onclick = () => {
+    customBox.style.display = 'none';
+};
+
+// Formatting function for selection-based editing
+function formatDoc(cmd, value) {
+    document.execCommand(cmd, false, value);
+}
+
+// Map color pickers to execCommand for selection support
+document.getElementById('fontColor').oninput = (e) => {
+    formatDoc('foreColor', e.target.value);
+};
+
+// Background color still applies to the whole box for a "plate" look
+document.getElementById('bgColor').oninput = (e) => {
+    customBox.style.backgroundColor = e.target.value;
+};
+
+// Dragging Logic (Isolated to the handle)
+let isDraggingText = false;
+let textOffset = { x: 0, y: 0 };
+
+textHandle.onmousedown = (e) => {
+    isDraggingText = true;
+    textOffset.x = e.clientX - customBox.offsetLeft;
+    textOffset.y = e.clientY - customBox.offsetTop;
+    e.preventDefault(); // Prevents text selection while starting a drag
+};
+
+window.addEventListener('mousemove', (e) => {
+    if (!isDraggingText) return;
+    customBox.style.left = (e.clientX - textOffset.x) + 'px';
+    customBox.style.top = (e.clientY - textOffset.y) + 'px';
+});
+
+window.addEventListener('mouseup', () => { 
+    isDraggingText = false; 
+});
+
+const warningBtn = document.getElementById('warningToggle');
+let warningsVisible = false;
+
+warningBtn.onclick = () => {
+    warningsVisible = !warningsVisible;
+    const visibility = warningsVisible ? 'visible' : 'none';
+    
+    // Toggle BOTH layers
+    map.setLayoutProperty('warnings-shading', 'visibility', visibility);
+    map.setLayoutProperty('warnings-border', 'visibility', visibility);
+    
+    if (warningsVisible) {
+        warningBtn.classList.add('active');
+        warningBtn.style.color = '#ff4444';
+        updateWarnings(); // Trigger immediate fetch
+    } else {
+        warningBtn.classList.remove('active');
+        warningBtn.style.color = '';
+    }
+};
+editableText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault(); // Stop the browser from making nested divs
+
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+        const range = selection.getRangeAt(0);
+
+        // 1. Create a line break
+        const br = document.createElement('br');
+        
+        // 2. Create the small text container
+        const smallTextNode = document.createElement('span');
+        smallTextNode.style.fontSize = '14px'; 
+        smallTextNode.style.fontWeight = 'normal';
+        smallTextNode.style.display = 'block'; // Forces it to the next line without div margins
+        smallTextNode.style.lineHeight = '1.2';
+        smallTextNode.innerHTML = '&#8203;'; // Zero-width space for focus
+
+        // 3. Insert them
+        range.deleteContents();
+        range.insertNode(smallTextNode);
+        range.insertNode(br);
+        
+        // 4. Move the cursor into the span
+        range.setStart(smallTextNode, 1); // Place after the zero-width space
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+});
+async function updateWarnings() {
+    try {
+        const response = await fetch('https://api.weather.gov/alerts/active?status=actual');
+        const data = await response.json();
+
+        // 1. Filter your events as you were doing
+        const targetEvents = new Set([
+            "tornado warning",
+            "severe thunderstorm warning",
+            "flash flood warning",
+            "special weather statement",
+            "special marine warning",
+            "flood advisory"
+        ]);
+
+        let filtered = data.features.filter(f => {
+            const eventName = (f.properties.event || "").toLowerCase().trim();
+            const warnId = f.properties.id || f.id;
+            return targetEvents.has(eventName) && !ignoredWarnings.includes(warnId);
+        });
+
+        // 2. SORT THE DATASET (Foundation)
+        // Higher number = Higher priority = Drawn later (on top)
+        const priority = {
+            "Tornado Warning": 6,
+            "Severe Thunderstorm Warning": 5,
+            "Flash Flood Warning": 4,
+            "Special Weather Statement": 3,
+            "Special Marine Warning": 2,
+            "Flood Advisory": 1
+        };
+
+        filtered.sort((a, b) => {
+            const valA = priority[a.properties.event] || 0;
+            const valB = priority[b.properties.event] || 0;
+            return valA - valB; // Sorts Ascending: 1 (Bottom) to 6 (Top)
+        });
+
+        // 3. Assign numeric IDs for tracking
+        data.features = filtered.map((f, index) => ({
+            ...f,
+            id: index 
+        }));
+
+        const source = map.getSource('nws-warnings');
+        if (source) source.setData(data);
+        
+        applyWarningIsolation();
+
+    } catch (e) {
+        console.error("Warning fetch error:", e);
+    }
+}
+
+function resetWarningIsolation() {
+    if (isolatedWarningId !== null) {
+        map.setFeatureState(
+            { source: 'nws-warnings', id: isolatedWarningId },
+            { selected: false }
+        );
+    }
+    isolatedWarningId = null;
+    applyWarningIsolation();
+}
+
+function closeWarningPopup() {
+    const popups = document.getElementsByClassName('maplibregl-popup');
+    for (let p of popups) p.remove();
+    resetWarningIsolation();
+}
+
+function ignoreWarning(id) {
+    ignoredWarnings.push(id);
+    closeWarningPopup();
+    updateWarnings();
+}
+
+function makePopupDraggable(id) {
+    const inner = document.getElementById(id);
+    if (!inner) return;
+
+    // THIS is the actual visible popup box
+    const popupContent = inner.closest('.maplibregl-popup-content');
+
+    const handle = inner.querySelector('.popup-handle');
+
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    let currentX = 0;
+    let currentY = 0;
+
+    popupContent.style.position = 'relative';
+
+    handle.onmousedown = (e) => {
+        isDragging = true;
+
+        startX = e.clientX - currentX;
+        startY = e.clientY - currentY;
+
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        currentX = e.clientX - startX;
+        currentY = e.clientY - startY;
+
+        popupContent.style.transform =
+            `translate(${currentX}px, ${currentY}px)`;
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+}
+
+// Ensure toggle logic uses the dual-layer control
+document.getElementById('warningToggle').onclick = () => {
+    warningsVisible = !warningsVisible;
+    const visibility = warningsVisible ? 'visible' : 'none';
+    map.setLayoutProperty('warnings-shading', 'visibility', visibility);
+    map.setLayoutProperty('warnings-border', 'visibility', visibility);
+    const btn = document.getElementById('warningToggle');
+    if (warningsVisible) {
+        btn.classList.add('active');
+        btn.style.color = '#ff4444';
+        updateWarnings();
+    } else {
+        btn.classList.remove('active');
+        btn.style.color = '';
+    }
+};
+
+setInterval(updateWarnings, 120000);
+
+
+function applyWarningIsolation() {
+    if (!map.getLayer('warnings-shading')) return;
+
+    // 1. Priority: If a specific warning is clicked
+    if (isolatedWarningId !== null) {
+        map.setPaintProperty('warnings-shading', 'fill-opacity', [
+            'case',
+            ['==', ['id'], isolatedWarningId], 0.6,
+            0.2
+        ]);
+        map.setPaintProperty('warnings-border', 'line-opacity', [
+            'case',
+            ['==', ['id'], isolatedWarningId], 1,
+            0.3
+        ]);
+    } 
+    else {
+        // 2. Check for active drawing or existing tracks
+        const stormSource = map.getSource('storm');
+        const hasActiveFeatures = stormSource && stormSource._data && stormSource._data.features.length > 0;
+        
+        // Conditions that trigger dimming
+        const isDrawingOrTracking = dragging || edgeLocked || mode === 'cone' || mode === 'manual' || hasActiveFeatures;
+
+        if (isDrawingOrTracking) {
+            // DIMMED STATE
+            map.setPaintProperty('warnings-shading', 'fill-opacity', 0.2);
+            map.setPaintProperty('warnings-border', 'line-opacity', 0.3);
+        } else {
+            // BRIGHT STATE (Normal)
+            map.setPaintProperty('warnings-shading', 'fill-opacity', 0.6);
+            map.setPaintProperty('warnings-border', 'line-opacity', 1);
+        }
+    }
+}
+function getHailDescription(sizeStr) {
+    const size = parseFloat(sizeStr);
+    if (isNaN(size)) return null;
+
+    if (size >= 4.50) return "(Grapefruit)";
+    if (size >= 4.00) return "(Softball)";
+    if (size >= 3.00) return "(Apple)";
+    if (size >= 2.75) return "(Baseball)";
+    if (size >= 2.50) return "(Tennis Ball)";
+    if (size >= 2.00) return "(Hen Egg)";
+    if (size >= 1.75) return "(Golf Ball)";
+    if (size >= 1.50) return "(Ping Pong Ball)";
+    if (size >= 1.25) return "(Half Dollar)";
+    if (size >= 1.00) return "(Quarter)";
+    if (size >= 0.88) return "(Nickel)";
+    if (size >= 0.75) return "(Penny)";
+    if (size >= 0.50) return "";
+    return "";
+}
+
+function updateCardVisibility() {
+    const card = document.getElementById('draggableCard');
+    const stormSource = map.getSource('storm');
+    
+    // Check if there are features currently drawn in the storm source
+    const hasActiveTrack = stormSource && 
+                           stormSource._data && 
+                           stormSource._data.features && 
+                           stormSource._data.features.length > 0;
+
+    // Show if in a tracking mode OR if a track already exists
+    if (mode === 'cone' || mode === 'manual' || hasActiveTrack) {
+        card.style.display = 'block';
+    } else {
+        card.style.display = 'none';
+    }
+}
+</script>
+</body>
+</html>

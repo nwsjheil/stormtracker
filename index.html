@@ -164,7 +164,17 @@ body{
     color: black;
 }
 
+/* By default, hide the buttons */
+.cone-button, .track-button {
+    display: none;
+}
 
+/* Only show them if a mouse (fine pointer) is detected */
+@media (pointer: fine) {
+    .cone-button, .track-button {
+        display: block; 
+    }
+}
 
 /* radar dropdown styling fix */
 #radarSelector{

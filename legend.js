@@ -17,7 +17,7 @@ const COG_CONFIG = {
             { label: '8" +', color: '#ffffc2' }
         ]
     },
-    '3h_qpe': {
+    '3h_inst_qpe': {
         title: "3 HR RAINFALL (IN)",
         steps: [
             { label: '0.01"', color: '#66ebe8' },
@@ -128,7 +128,38 @@ const COG_CONFIG = {
             { label: '65 (Extreme)', color: '#e932e8' },
             { label: '75+ (Hail)', color: '#9656bf' }
         ]
-    }
+    },
+    'kmlb_boha': {
+        title: "NEXRAD 1 HR RAINFALL (IN)",
+        steps: [
+            { label: '.10"', color: '#aaaaaa' },
+            { label: '.50"', color: '#00ffff' },
+            { label: '1.0"', color: '#00ff00' },
+            { label: '1.5"', color: '#ff00ff' },
+            { label: '2.0"', color: '#0000ff' },
+            { label: '3.0"', color: '#ffff00' },
+            { label: '4.0"', color: '#ffaa00' },
+            { label: '5.0"', color: '#ff0000' },
+            { label: '8.0"+', color: '#ffffff' }
+        ]
+    },
+    'kmlb_bdsa': {
+        title: "NEXRAD STORM TOTAL RAINFALL (IN)",
+        steps: [
+            { label: '.1"',  color: '#b3b3b3' }, // sampled above .1
+            { label: '.5"',  color: '#40b5b7' }, // sampled above .6 as requested
+            { label: '1"',   color: '#04d6d2' }, // sampled above 1
+            { label: '2"',   color: '#14bf14' }, // sampled above 2
+            { label: '3"',   color: '#d019c0' }, // sampled above 3
+            { label: '4"',   color: '#4011d3' }, // sampled above 3
+            { label: '5"',   color: '#2c16c1' }, // sampled above 5
+            { label: '6"',   color: '#ab9440' }, // sampled above 5
+            { label: '7"',   color: '#ffe903' }, // sampled above 8
+            { label: '8"',   color: '#ffba01' }, // sampled above 8
+            { label: '10"',  color: '#ff2800' }, // sampled above 10
+            { label: '15"',  color: '#ebc2c2' }  // sampled above 15
+        ]
+    },
 };
 
 /**

@@ -825,6 +825,29 @@ body{
     <button class="tool active" id="confirmExport">EXPORT NOW & COPY</button>
 </div>
 <div id="sampleTooltip" style="position:fixed; pointer-events:none; background:rgba(15, 23, 42, 0.9); color:#00ff92; padding:6px 12px; border-radius:8px; display:none; z-index:10000; font-size:14px; font-weight:900; border:2px solid #00ff92; backdrop-filter:blur(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-family:'Roboto', sans-serif;"></div>
+
+<div id="authModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; font-family:'Roboto',sans-serif;">
+    <div style="background:#1e293b; padding:25px; border-radius:12px; border:1px solid #334155; width:340px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+        <h3 style="color:white; margin-top:0; font-weight:900;">FORECASTER AUTHORIZATION</h3>
+        <p style="color:#94a3b8; font-size:14px; margin-bottom:20px;">
+            A password is required for high-res export. This will persist for the remainder of the browser tab session. 
+            <br>
+            <a href="https://docs.google.com/document/d/1lWcRUdplgO3lBndSz2VivlbfEaI_qu166_iRJg12-oc/preview?tab=t.0" target="_blank" style="color:#38bdf8; text-decoration:none; font-size:12px;">Retrieve it here</a>
+        </p>
+        
+        <input type="password" id="authKeyInput" placeholder="Enter Password..." style="width:100%; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:white; box-sizing:border-box; outline:none;">
+        
+        <div id="authError" style="color:#f87171; font-size:13px; margin-bottom:15px; display:none; font-weight:bold;">
+            Incorrect password. Try again.
+        </div>
+        
+        <div style="display:flex; gap:10px;">
+            <button id="authCancelBtn" style="flex:1; padding:12px; background:#475569; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700;">CANCEL</button>
+            <button id="authSubmitBtn" style="flex:1; padding:12px; background:#0284c7; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700;">AUTHORIZE</button>
+        </div>
+    </div>
+</div>
+
 <script>
 let coneWidth = 30; // Default width
 let isExportMode = false;
@@ -1223,7 +1246,7 @@ const popupHtml = `
     
     <div class="popup-handle" style="cursor:move; height:18px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
         <div class="exit-hint" style="opacity:0; transition: opacity 0.2s; display:flex; gap:10px;">
-             <span onclick="window.copyToClipboard('${smText}')" style="cursor:pointer; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px; font-size:9px; color:${iconColor}; font-weight:900; border:1px solid ${iconColor}44;">COPY SHORT TEXT</span>
+             <span onclick="window.copyToClipboard('${smText}', this)" style="cursor:pointer; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px; font-size:9px; color:${iconColor}; font-weight:900; border:1px solid ${iconColor}44;">COPY SHORT TEXT</span>
         </div>
         <div class="exit-hint" style="opacity:0; transition: opacity 0.2s; font-size: 9px; color: ${iconColor}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; pointer-events: none;">
             Click map to clear
@@ -2072,6 +2095,11 @@ function setMode(nextMode) {
             canvas.classList.add('cursor-crosshair'); // Change cursor to +
             updateWidthVisibility();
             buttons.cone.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "CONE MODE:<br>CLICK + DRAG TO TRACK";
             break;
@@ -2080,6 +2108,11 @@ function setMode(nextMode) {
             canvas.classList.add('cursor-crosshair'); // Change cursor to +
             updateWidthVisibility();
             buttons.manual.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "LINE TRACK MODE:<br>1. DRAG TO DRAW EDGE<br>2. MOVE TO PROJECT<br>3. CLICK TO LOCK";
             break;
@@ -2087,6 +2120,11 @@ function setMode(nextMode) {
         case 'draw':
             canvas.classList.add('cursor-crosshair'); // Change cursor to +
             buttons.draw.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "DRAW MODE:<br>CLICK + DRAG TO DRAW";
             break;
@@ -2094,6 +2132,11 @@ function setMode(nextMode) {
         case 'spotlight':
             canvas.classList.add('cursor-crosshair');
             buttons.spot.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "SPOTLIGHT MODE:<br>CLICK + DRAG TO HIGHLIGHT AN AREA";
             break;
@@ -2308,13 +2351,13 @@ function clearStorm() {
 document.getElementById('idModeBtn').onclick = () => {
     isIdMode = !isIdMode;
     const btn = document.getElementById('idModeBtn');
-    
+    setMode('pan');
     if (isIdMode) {
         // NEW: Turn off Eyedropper
         isSampleMode = false;
         sampleBtn.style.background = 'transparent';
         sampleBtn.style.color = '#a9e7ff';
-
+        
         btn.innerHTML = "ID<br>ROADS";
         btn.style.backgroundColor = "#3c7bba";
         map.getCanvas().style.cursor = 'help';
@@ -3014,33 +3057,62 @@ window.addEventListener('mouseup', () => {
     isDraggingUI = false;
 });
 
-document.getElementById('exportBtn').onclick = async () => {
-    // 1. Check if already authenticated in this session
+const authModal = document.getElementById('authModal');
+const authKeyInput = document.getElementById('authKeyInput');
+const authError = document.getElementById('authError');
+
+// 1. Unified Trigger: Resets and shows the modal
+function handleExportRequest() {
     if (sessionStorage.getItem('exportAuthorized') === 'true') {
-        isSampleMode = false; // Disable eyedropper before export
+        isSampleMode = false;
         return startExportFlow();
     }
+    
+    // UI Reset: Always clear text and errors before showing
+    authKeyInput.value = ""; 
+    authError.style.display = 'none';
+    authModal.style.display = 'flex';
+    
+    // Focus after the event loop clears to keep the input clean
+    setTimeout(() => authKeyInput.focus(), 10);
+}
 
-    const input = prompt("Enter NOAA Authorization Key to Export (Once per session):");
-    if (!input) return;
+// 2. Event Listeners
+document.getElementById('exportBtn').onclick = handleExportRequest;
 
-    // 2. Generate SHA-256 hash
+document.addEventListener('keydown', (e) => {
+    // Avoid triggering if already typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key.toLowerCase() === 'e') {
+        e.preventDefault(); // Prevents 'e' from ever being registered as a character
+        handleExportRequest();
+    }
+});
+
+// 3. Authorization Verification
+document.getElementById('authSubmitBtn').onclick = async () => {
+    const input = authKeyInput.value;
     const msgBuffer = new TextEncoder().encode(input);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // 3. Compare to your master hash
-    const masterHash = "b706305236242b0181d490002cc61629b42111dd9c567e2888183aec242d32bd";
-
-    if (hashHex === masterHash) {
-        sessionStorage.setItem('exportAuthorized', 'true'); // Remember for this session
+    const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Replace with your master hash
+    if (hashHex === "b706305236242b0181d490002cc61629b42111dd9c567e2888183aec242d32bd") {
+        sessionStorage.setItem('exportAuthorized', 'true');
+        authModal.style.display = 'none';
         isSampleMode = false;
         startExportFlow();
     } else {
-        alert("Invalid Authorization Key.");
+        authError.style.display = 'block';
+        authKeyInput.value = ""; // Clear on fail so they can try again immediately
+        authKeyInput.focus();
     }
 };
+
+// Close and Utility
+document.getElementById('authCancelBtn').onclick = () => authModal.style.display = 'none';
+authKeyInput.onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('authSubmitBtn').click(); };
 
 function startExportFlow() {
     const vf = document.getElementById('exportViewfinder');
@@ -3891,7 +3963,7 @@ function makePopupDraggable(id) {
 }
 
 
-setInterval(updateWarnings, 120000);
+setInterval(updateWarnings, 60000);
 
 
 function applyWarningIsolation() {

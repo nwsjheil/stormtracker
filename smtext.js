@@ -1,8 +1,27 @@
 // Global namespace to ensure availability in popup HTML
-window.copyToClipboard = function(text) {
+window.copyToClipboard = function(text, btnElement) {
     const charCount = text.length;
+    
     navigator.clipboard.writeText(text).then(() => {
-        alert(`Social Media text copied! (${charCount} characters)`);
+        if (btnElement) {
+            // Store original text (usually "COPY SHORT TEXT")
+            const originalText = btnElement.innerText;
+            
+            // Update button with status and char count
+            btnElement.innerText = `COPIED! (${charCount} chars)`;
+            
+            // Prevent clicking again while the message is showing
+            btnElement.style.pointerEvents = 'none';
+
+            // Reset after 4 seconds
+            setTimeout(() => {
+                btnElement.innerText = originalText;
+                btnElement.style.pointerEvents = 'auto';
+            }, 4000);
+        } else {
+            // Fallback alert if element isn't passed correctly
+            alert(`Social Media text copied! (${charCount} characters)`);
+        }
     });
 };
 
@@ -38,19 +57,27 @@ function generateSMText(props) {
     const areaDesc = props.areaDesc || "";
     const localTime = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+// --- NEW OVERRIDE FOR SPECIAL MARINE WARNING ---
+    const isMarine = event.includes("Special Marine Warning");
+    
     // 1. Simplified Search: Check areaDesc against all names in counties.json
     let foundCounties = [];
-    Object.values(countyLookup).forEach(county => {
-        // Create a strict regex to match the county name as a whole word
-        const regex = new RegExp(`\\b${county.name}\\b`, 'i');
-        if (regex.test(areaDesc)) {
-            foundCounties.push(county.name);
-        }
-    });
+    
+    if (isMarine) {
+        // Skip lookup for marine warnings
+        foundCounties = []; 
+    } else {
+        Object.values(countyLookup).forEach(county => {
+            const regex = new RegExp(`\\b${county.name}\\b`, 'i');
+            if (regex.test(areaDesc)) {
+                foundCounties.push(county.name);
+            }
+        });
+    }
 
     // Clean up duplicates and format grammar
     const uniqueCounties = [...new Set(foundCounties)];
-    const countiesStr = formatCountyList(uniqueCounties);
+    const countiesStr = isMarine ? "portions of the local waters" : formatCountyList(uniqueCounties);
     //const countySuffix = uniqueCounties.length > 1 ? " Counties" : " County";
 
     // 2. Expiration and Hazard Shaping
@@ -60,6 +87,18 @@ function generateSMText(props) {
 // HAZARD CONFIGS (Fixed Rainfall Regex)
     let hazardDetails = "";
     const hazardConfigs = {
+        "Special Marine Warning": function() {
+            const p = typeof props.parameters === 'string' ? JSON.parse(props.parameters) : props.parameters;
+            const windVal = p?.maxWindGust ? p.maxWindGust[0] : null;
+            const hailVal = p?.maxHailSize ? p.maxHailSize[0] : null;
+            
+            let text = "Seek safe harbor immediately. ";
+            if (windVal) text += `Wind gusts to ${windVal} `;
+            if (hailVal && parseFloat(hailVal) > 0) text += `${windVal ? 'and ' : ''}large hail `;
+            if (windVal || (hailVal && parseFloat(hailVal) > 0)) text += "are possible. ";
+            
+            return text;
+        },
         "Flood": () => {
             // Captures rain that has already fallen
             const rain = description.match(/[^.]*?(\d+(\.\d+)?\s?inches?|between\s?\d+(\.\d+)?\s?and\s?\d+(\.\d+)?\s?inches?)\s?of\s?rain\s?(has|have)\s?fallen[^.]*/i);
@@ -74,8 +113,8 @@ function generateSMText(props) {
         },
         "StormHazards": function(p) {
             const windVal = p?.maxWindGust ? p.maxWindGust[0] : null;
-            const hailVal = p?.maxHailSize ? p.maxHailSize[0] : null;
-            
+            // Extract value, but treat "0.00" or 0 as null
+            const hailVal = (p?.maxHailSize && parseFloat(p.maxHailSize[0]) > 0) ? p.maxHailSize[0] : null;            
             let cleanedHail = null;
             if (hailVal) {
                 // 1. Call your existing function
@@ -106,11 +145,11 @@ function generateSMText(props) {
 
             let finalSentence = "";
             if (windPart && hailPart) {
-                finalSentence = `${windPart} and ${hailPart} are possible. `;
+                finalSentence = `Threats include ${windPart} and ${hailPart}. `;
             } else if (windPart) {
-                finalSentence = `${windPart} is possible. `;
+                finalSentence = `The primary threat is ${windPart}. `;
             } else if (hailPart) {
-                finalSentence = `${hailPart} is possible. `;
+                finalSentence = `The primary threat is ${hailPart}. `;
             }
 
             // Fix Sentence Case: Capitalize first letter
@@ -121,7 +160,14 @@ function generateSMText(props) {
         },
         "Severe Thunderstorm": function() {
             const p = typeof props.parameters === 'string' ? JSON.parse(props.parameters) : props.parameters;
-            return this.StormHazards(p);
+            let text = this.StormHazards(p);
+            
+            // Check for the "POSSIBLE" tornado tag
+            if (p?.tornadoDetection && p.tornadoDetection[0].toUpperCase() === "POSSIBLE") {
+                text += "A tornado is also possible. ";
+            }
+            
+            return text;
         },
         "Special Weather Statement": function() {
             const p = typeof props.parameters === 'string' ? JSON.parse(props.parameters) : props.parameters;

@@ -21,6 +21,7 @@ rel="stylesheet"
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl-cog-protocol@1.0.0/dist/index.browser.js"></script>
 <script src="https://unpkg.com/georaster"></script>
 <script src="legend.js"></script>
+<script src="smtext.js"></script>
 <style>
 
 :root{
@@ -546,15 +547,24 @@ body{
     box-shadow: 0 0 10px rgba(253, 224, 71, 0.5);
 }
 
-/* Hide the hint by default */
-.exit-hint {
-    opacity: 0 !important;
-    transition: opacity 0.2s ease;
+/* Triggers visibility for the entire header bar on popup hover */
+.custom-warning-popup:hover .exit-hint {
+    opacity: 1 !important;
 }
 
-/* Show the hint only when the popup is hovered */
-.custom-warning-popup:hover .exit-hint {
-    opacity: 0.8 !important;
+/* Base style for the COPY button inside the header */
+.exit-hint span {
+    pointer-events: auto !important;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+/* Hover state for the COPY button specifically */
+.exit-hint span:hover {
+    background: rgba(255, 255, 255, 0.4) !important; /* Lighter background on hover */
+    color: #ff4b4b !important; /* Force white text */
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    transform: scale(1.05); /* Slight pop effect */
 }
 </style>
 </head>
@@ -618,6 +628,10 @@ body{
                 <optgroup label="NATIONAL">
         <option value="conus|conus_bref_qcd">MRMS</option>
     </optgroup>
+                    <optgroup label="REGIONAL">
+        <option value="cog|rala">BREF</option>
+        <option value="cog|reflectivity_qc">COMP</option>
+    </optgroup>
                 <optgroup label="NEXRAD">
                     <option value="kmlb|kmlb_sr_bref" selected>MLB REF</option>
                     <option value="kmlb|kmlb_sr_bvel" >MLB VEL</option>
@@ -634,6 +648,7 @@ body{
                     <option value="ktpa|ktpa_bref1">TPA</option>
                 </optgroup>
                 <optgroup label="MRMS">
+    <option value="cog|precip_rate">P-RATE</option>
     <option value="cog|1h_qpe">1H QPE</option>
     <option value="cog|3h_qpe">3H QPE</option>
     <option value="cog|6h_qpe">6H QPE</option>
@@ -659,6 +674,11 @@ body{
         <div style="font-size:9px; color:#94a3b8; font-weight:800; text-transform:uppercase;">Opacity</div>
         <input type="range" id="miniOpacitySlider" min="0" max="100" value="90" style="accent-color:var(--accent); cursor:pointer;">
         <div id="miniOpacityVal" style="font-size:11px; color:white; text-align:right;">90%</div>
+        <div id="thresholdContainer" style="display:none; flex-direction:column; gap:8px;">
+        <div style="font-size:9px; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-top:10px;">Data Threshold</div>
+        <input type="range" id="dataFilterSlider" min="0" max="75" value="0" step="1" style="accent-color:var(--accent); cursor:pointer;">
+        <div id="dataFilterVal" style="font-size:11px; color:white; text-align:right;">0</div>
+</div>
     </div>
 </div>
         <!-- DURATION -->
@@ -758,6 +778,7 @@ body{
     <button class="tool" id="cancelExport" style="background:#ef4444; color:white;">CANCEL</button>
     <button class="tool active" id="confirmExport">EXPORT NOW & COPY</button>
 </div>
+<div id="sampleTooltip" style="position:fixed; pointer-events:none; background:rgba(15, 23, 42, 0.9); color:#00ff92; padding:6px 12px; border-radius:8px; display:none; z-index:10000; font-size:14px; font-weight:900; border:2px solid #00ff92; backdrop-filter:blur(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-family:'Roboto', sans-serif;"></div>
 <script>
 let coneWidth = 30; // Default width
 let isExportMode = false;
@@ -994,17 +1015,19 @@ map.on('click', 'warnings-shading', (e) => {
 
     const currentZoom = map.getZoom();
 
-    // --- NEW: AUTO-CENTER & ZOOM LOGIC ---
-    // If zoomed out more than level 8, fly to the warning
-    if (currentZoom < 8) {
-        // Calculate the center of the clicked polygon using Turf
-        const center = turf.center(feat).geometry.coordinates;
+    // --- UPDATED: SMART AUTO-FIT LOGIC ---
+    if (currentZoom < 10) { // Only auto-zoom if we aren't already zoomed in deep
+        // 1. Get the bounding box of the entire polygon
+        const bbox = turf.bbox(feat);
         
-        map.flyTo({
-            center: center,
-            zoom: 9.5, // Zoom in to a level where detail is visible
-            essential: true,
-            duration: 1200 // Smooth transition in milliseconds
+        // 2. Fit the map to those coordinates
+        map.fitBounds([
+            [bbox[0], bbox[1]], // Southwest corner
+            [bbox[2], bbox[3]]  // Northeast corner
+        ], {
+            padding: 200,      // Leaves room for your UI card and popups
+            duration: 1200,    // Smooth transition
+            essential: true
         });
     }
     
@@ -1137,13 +1160,19 @@ const ffThreat = params.flashFloodDamageThreat ? params.flashFloodDamageThreat[0
 
 // 2. Update the HTML Template (around line 485)
 // Ensure every variable used here is defined above
+const rawSmText = generateSMText(props);
+const smText = rawSmText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
 const popupHtml = `
-    <div id="warn-popup-${warnId}" class="movable-popup" style="width:300px; padding:12px; cursor: default;font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
+    <div id="warn-popup-${warnId}" class="movable-popup" style="width:300px; padding:12px; cursor: default; font-family:'Roboto', sans-serif; background:white; border-radius:12px; overflow:hidden; border: 1px solid ${activeColor}44; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
     
-    <div class="popup-handle" style="cursor:move; height:14px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:flex-end; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
-    <div class="exit-hint" style="font-size: 9px; color: ${iconColor}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; pointer-events: none; user-select: none;">
-        Click map to clear.
-    </div>
+    <div class="popup-handle" style="cursor:move; height:18px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
+        <div class="exit-hint" style="opacity:0; transition: opacity 0.2s; display:flex; gap:10px;">
+             <span onclick="window.copyToClipboard('${smText}')" style="cursor:pointer; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px; font-size:9px; color:${iconColor}; font-weight:900; border:1px solid ${iconColor}44;">COPY SHORT TEXT</span>
+        </div>
+        <div class="exit-hint" style="opacity:0; transition: opacity 0.2s; font-size: 9px; color: ${iconColor}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; pointer-events: none;">
+            Click map to clear
+        </div>
     </div>
 
         <div class="warn-edit-tools" style="display:none; gap:5px; padding:8px 0; border-bottom:1px solid #eee; margin-bottom:5px; justify-content:center;">
@@ -1185,7 +1214,7 @@ const popupHtml = `
             anchor: 'top-left', 
             // Positive values move the popup away from the top-left corner of the cursor
             // [x, y] - positive x moves right, positive y moves down
-            offset: [-500, -250] 
+            offset: [-500, -150] 
         })
             .setLngLat(e.lngLat)
             .setHTML(popupHtml)
@@ -1946,16 +1975,8 @@ let roadName = p._name || p._name_global || p.name || p._ref || p.ref || "Local 
     } 
 });
 
-// 2. The Universal Hover (Cursor Feedback)
-map.on('mousemove', (e) => {
-    if (!isIdMode) return;
 
-    const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
-    const features = map.queryRenderedFeatures(box, { layers: ['road-shields-hide'] });
 
-    // Switch to 'help' question mark when near a road, otherwise 'crosshair'
-    map.getCanvas().style.cursor = features.length ? 'help' : 'crosshair';
-});
 
     // Default: Disable dragPan because starting in Cone Mode
     //map.dragPan.disable();
@@ -2150,6 +2171,7 @@ function getSampleAtLngLat(lng, lat) {
 
     const { xmin, ymax, pixelWidth, pixelHeight, values } = window.activeGeoRaster;
     
+    // Web Mercator conversion
     const x = (lng * 20037508.34) / 180;
     const y = Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180);
     const mercY = (y * 20037508.34) / 180;
@@ -2161,8 +2183,25 @@ function getSampleAtLngLat(lng, lat) {
         let val = values[0][row][col];
         if (val <= 0) return null; 
 
-        // Both Hail (mesh) and Rain (qpe) are in mm, so both need / 25.4
-        // Rounding to .toFixed(1) for tenths of an inch
+        const type = window.activeProductType || "";
+
+        // 1. PRECIP RATE: Intensity in inches per hour
+        if (type.includes('precip_rate')) {
+            return (val / 25.4).toFixed(1) + '"/hr';
+        }
+
+        // 2. QPE / MESH / HAIL: Total depth or size in inches
+        if (type.includes('qpe') || type.includes('mesh')) {
+            return (val / 25.4).toFixed(1) + '"';
+        }
+
+        // 3. REFLECTIVITY: Radar intensity in dBZ
+        // Note: MRMS Reflectivity is already in dBZ, no / 25.4 needed
+        if (type.includes('reflectivity') || type.includes('rala')) {
+            return Math.round(val) + ' dBZ';
+        }
+
+        // Fallback for unknown types
         return (val / 25.4).toFixed(1) + '"'; 
     }
     return null;
@@ -2187,11 +2226,7 @@ map.on('click', (e) => {
 });
 
 // Update the Hover Tooltip (Optional but helpful)
-map.on('mousemove', (e) => {
-    if (!isSampleMode) return;
-    const value = getSampleAtLngLat(e.lngLat.lng, e.lngLat.lat);
-    map.getCanvas().style.cursor = value ? 'copy' : 'crosshair';
-});
+
 
 function clearStorm() {
     map.getSource('storm').setData({
@@ -2374,6 +2409,7 @@ if(mode === 'draw' && dragging){
         redrawDrawings();
         setMode('pan');
     }
+
 });
 
 /* =========================================
@@ -2381,49 +2417,96 @@ if(mode === 'draw' && dragging){
 ========================================= */
 
 map.on('mousemove', (e) => {
+    const tooltip = document.getElementById('sampleTooltip');
+    
+    // --- 1. PRIORITY HOVER MODES (Sampling & Road ID) ---
+    
+    // EYEDROPPER/SAMPLING HOVER (GREEN THEME)
+    if (isSampleMode) {
+        const value = getSampleAtLngLat(e.lngLat.lng, e.lngLat.lat);
+        if (value) {
+            tooltip.style.display = 'block';
+            tooltip.style.color = '#00ff92'; // Green Text
+            tooltip.style.borderColor = '#00ff92'; // Green Border
+            tooltip.innerHTML = `${value}`;
+            tooltip.style.left = (e.originalEvent.clientX + 15) + 'px';
+            tooltip.style.top = (e.originalEvent.clientY + 15) + 'px';
+            map.getCanvas().style.cursor = 'copy';
+            return; 
+        } else {
+            tooltip.style.display = 'none';
+        }
+    }
 
+    // ROAD ID HOVER (YELLOW THEME)
+    if (isIdMode) {
+        const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+        const features = map.queryRenderedFeatures(box, { layers: ['road-shields-hide'] });
+        
+        if (features.length > 0) {
+            const p = features[0].properties;
+            let roadName = p._name || p._name_global || p.name || p._ref || p.ref || "Local Road";
+
+            // Florida Road Cleanup
+            if (/^FL[- ]?5$/i.test(roadName)) roadName = "US-1";
+            else if (/^FL[- ]?91$/i.test(roadName)) roadName = "FL TPKE";
+            else if (/^FL[- ]?25$/i.test(roadName)) roadName = "US-27";
+            else if (/^FL[- ]?9$/i.test(roadName)) roadName = "I-95";
+
+            tooltip.style.display = 'block';
+            tooltip.style.color = '#fffca3'; // Yellow Text
+            tooltip.style.borderColor = '#fffca3'; // Yellow Border
+            tooltip.innerHTML = `${roadName}`;
+            tooltip.style.left = (e.originalEvent.clientX + 15) + 'px';
+            tooltip.style.top = (e.originalEvent.clientY + 15) + 'px';
+            map.getCanvas().style.cursor = 'help';
+            return; 
+        } else {
+            tooltip.style.display = 'none';
+            map.getCanvas().style.cursor = 'crosshair';
+        }
+    }
+
+    // Hide tooltip if neither mode is active
+    if (!isSampleMode && !isIdMode) {
+        tooltip.style.display = 'none';
+    }
+
+    // --- 2. GUARD CLAUSES ---
+    if (mode === 'pan' && !isSampleMode && !isIdMode) {
+        map.getCanvas().style.cursor = '';
+        return;
+    }
+
+    // --- 3. DRAWING & TRACKING MODES ---
     if(mode === 'draw' && dragging){
+        currentDrawing.push([e.lngLat.lng, e.lngLat.lat]);
+        redrawDrawings();
+        return;
+    }
 
-    currentDrawing.push([
-        e.lngLat.lng,
-        e.lngLat.lat
-    ]);
-
-    redrawDrawings();
-
-    return;
-}
-    if (mode === 'pan') return;
     const mouse = [e.lngLat.lng, e.lngLat.lat];
 
-if (mode === 'cone') {
-    if (!dragging || !startPoint) return;
+    if (mode === 'cone') {
+        if (!dragging || !startPoint) return;
+        const visualDistance = turf.distance(startPoint, mouse, { units: 'miles' });
+        const hours = selectedDuration / 60;
+        const speedMPH = visualDistance / hours;
+        window.currentEndPoint = mouse; 
+        drawCone(startPoint, mouse, speedMPH);
+    }
 
-    // 1. Calculate ACTUAL distance from start to mouse (in miles)
-    const visualDistance = turf.distance(startPoint, mouse, { units: 'miles' });
-    const hours = selectedDuration / 60;
-
-    // 2. Derive speed: Speed = Distance / Time
-    const speedMPH = visualDistance / hours;
-
-    // 3. The end point IS the mouse position now
-    window.currentEndPoint = mouse; 
-    drawCone(startPoint, mouse, speedMPH);
-}
-
-if (mode === 'manual') {
+    if (mode === 'manual') {
         if (dragging) {
             const last = stormLine[stormLine.length - 1];
             const dist = turf.distance(last, mouse, { units: 'miles' });
-            // Only add points if moved significantly to keep performance high
             if (dist > 0.2) {
                 stormLine.push(mouse);
                 drawEdgeOnly();
             }
         }
-        // This is the part that projects the box while you move your mouse
         if (edgeLocked) {
-            window.currentEndPoint = mouse; // Store this for duration changes
+            window.currentEndPoint = mouse;
             drawProjectedTracker(mouse);
         }
     }
@@ -2431,23 +2514,14 @@ if (mode === 'manual') {
     if ((mode === 'draw' || mode === 'spotlight') && dragging) {
         const lastPoint = currentDrawing[currentDrawing.length - 1];
         const newPoint = [e.lngLat.lng, e.lngLat.lat];
-
         if (lastPoint) {
-            // Only add the point if the mouse moved more than ~5 pixels
-            // This acts as a "stabilizer" for your hand
             const dist = turf.distance(lastPoint, newPoint, { units: 'miles' });
-            if (dist < 0.05) return; // Adjust this number to change 'smoothness'
+            if (dist < 0.05) return;
         }
-
         currentDrawing.push(newPoint);
         redrawDrawings();
-        return;
     }
 });
-
-
-
-
 
 /* =========================================
    DRAW EDGE ONLY
@@ -3275,215 +3349,204 @@ try {
         console.error("Error loading NWS GeoJSON:", e);
     }
 }
+
+const loadCOG = async () => {
+    const url = `https://jhwxtools.com/mrms/output/mrms_${window.activeProductType}_southeast_cog.tif?t=${Date.now()}`;
+    
+    const sourceId = 'cog-source-active';
+    const layerId = 'cog-layer-active';
+    
+    const filterSlider = document.getElementById('dataFilterSlider');
+    let filterThreshold = filterSlider ? parseFloat(filterSlider.value) : 0;
+    const currentOpacity = document.getElementById('miniOpacitySlider').value / 100;
+
+    // --- UNIT CONVERSION LOGIC ---
+    // MRMS Data is in mm. If the product is rain or hail, 
+    // convert the slider's "inches" value to "mm" for the comparison loop.
+    const isImperialProduct = window.activeProductType.match(/rate|qpe|mesh/);
+    const internalThreshold = isImperialProduct ? filterThreshold * 25.4 : filterThreshold;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("File not found");
+        const arrayBuffer = await response.arrayBuffer();
+        window.activeGeoRaster = await window.parseGeoraster(arrayBuffer);
+
+        const georaster = window.activeGeoRaster;           
+        const canvas = document.createElement("canvas");
+        canvas.width = georaster.width;
+        canvas.height = georaster.height;
+        const ctx = canvas.getContext("2d");
+        const image = ctx.createImageData(georaster.width, georaster.height);
+        const values = georaster.values[0];
+
+        let p = 0;
+        for (let y = 0; y < georaster.height; y++) {
+            for (let x = 0; x < georaster.width; x++) {
+                const val = values[y][x];
+                let rgba;
+                
+                // Ramp Logic
+                if (window.activeProductType.includes('mesh')) rgba = colorRampHail(val);
+                else if (window.activeProductType.includes('rate')) rgba = colorRampPrecipRate(val);
+                else if (window.activeProductType.includes('rala') || window.activeProductType.includes('reflectivity')) rgba = colorRampReflectivity(val);
+                else if (window.activeProductType.match(/6h|12h|24h/)) rgba = colorRampExtendedQPE(val / 25.4);
+                else rgba = colorRamponeHR(val / 25.4);
+
+                if (!rgba) {
+                    image.data[p++] = 0; image.data[p++] = 0; image.data[p++] = 0; image.data[p++] = 0;
+                } else if (val < internalThreshold) { // Use the converted threshold here
+                    image.data[p++] = rgba[0] * 0.3; image.data[p++] = rgba[1] * 0.3; 
+                    image.data[p++] = rgba[2] * 0.3; image.data[p++] = 100;           
+                } else {
+                    image.data[p++] = rgba[0]; image.data[p++] = rgba[1];
+                    image.data[p++] = rgba[2]; image.data[p++] = rgba[3];
+                }
+            }
+        }
+        
+        ctx.putImageData(image, 0, 0);
+
+        const webMercatorToLngLat = (x, y) => ({
+            lng: (x / 20037508.34) * 180,
+            lat: (180 / Math.PI) * (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2)
+        });
+
+        const nw = webMercatorToLngLat(georaster.xmin, georaster.ymax);
+        const ne = webMercatorToLngLat(georaster.xmax, georaster.ymax);
+        const se = webMercatorToLngLat(georaster.xmax, georaster.ymin);
+        const sw = webMercatorToLngLat(georaster.xmin, georaster.ymin);
+        const coords = [[nw.lng, nw.lat], [ne.lng, ne.lat], [se.lng, se.lat], [sw.lng, sw.lat]];
+
+        if (map.getSource(sourceId)) {
+            map.getSource(sourceId).updateImage({ url: canvas.toDataURL(), coordinates: coords });
+        } else {
+            map.addSource(sourceId, { type: "image", url: canvas.toDataURL(), coordinates: coords });
+            map.addLayer({
+                id: layerId,
+                type: "raster",
+                source: sourceId,
+                paint: { 'raster-resampling': 'nearest', 'raster-opacity': currentOpacity, 'raster-fade-duration': 0 }
+            }, 'radar'); // Replace 'radar' with the ID of a layer to stay BEHIND if needed
+        }
+    } catch (err) {
+        console.error("COG Refresh Failed:", err);
+    }
+};
+
 // Update your existing onchange handler
 document.getElementById('radarSelector').onchange = async (e) => {
-
     const currentOpacity = document.getElementById('miniOpacitySlider').value / 100;
     const parts = e.target.value.split('|');
     const folder = parts[0]; 
     const layer = parts[1];  
-// --- TOGGLE EYEDROPPER VISIBILITY ---
-    if (folder === 'cog') {
-        sampleBtn.style.display = 'flex';
-    } else {
-        sampleBtn.style.display = 'none';
-        // Force sampling mode off if the tool is hidden
-        isSampleMode = false;
-        sampleBtn.style.background = 'transparent';
-        sampleBtn.style.color = '#a9e7ff';
-        map.getCanvas().style.cursor = '';
-    }
-    activeSamples = []; // Reset the sampling array
-    if (map.getSource('sample-labels')) {
-        map.getSource('sample-labels').setData({ type: 'FeatureCollection', features: [] });
-    }
-    const legendEl = document.getElementById('cogLegend'); // The legend container
-    console.log("Layer selected:", layer, "Config exists:", typeof COG_CONFIG !== 'undefined' ? !!COG_CONFIG[layer] : "File not loaded");
-// Global to store the active timestamp for the export canvas
-window.activeLayerTimestamp = "";
+    window.activeProductType = layer;
 
-// --- LEGEND UI MANAGEMENT ---
-legendEl.style.display = 'none';
-
-if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
-    const config = COG_CONFIG[layer];
-    
-    // Function to search for the layer in a specific metadata file
-    const getTimestamp = async (url) => {
-        try {
-            const resp = await fetch(`${url}?t=${Date.now()}`);
-            const text = await resp.text();
-            const lines = text.split('\n');
-            const match = lines.find(l => l.startsWith(layer));
-            return match ? match.split(',')[1].trim() : null;
-        } catch (e) {
-            return null;
-        }
-    };
-
-    // Check both files sequentially to find the correct layer data
-    (async () => {
-        let isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/2min.txt');
-        
-        // If not found in 2min (radar), check hourly (rainfall)
-        if (!isoTime) {
-            isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/hourly.txt');
-        }
-
-        if (isoTime) {
-            const dateObj = new Date(isoTime); // Automatically converts UTC to Local Time
-            
-            // Format: HH:MM AM/PM TZ MM/DD/YY
-            const timeStr = dateObj.toLocaleTimeString([], { 
-                hour: 'numeric', 
-                minute: '2-digit', 
-                timeZoneName: 'short' 
-            });
-            const dateStr = dateObj.toLocaleDateString([], {
-                month: '2-digit', day: '2-digit', year: '2-digit'
-            });
-
-            window.activeLayerTimestamp = ` AS OF ${timeStr} ${dateStr}`;
-        } else {
-            window.activeLayerTimestamp = "";
-        }
-
-        // Apply title + timestamp to the HTML UI
-        document.getElementById('legendTitle').innerText = config.title + window.activeLayerTimestamp;
-    })();
-
-    // Render legend items from COG_CONFIG
-    document.getElementById('legendItems').innerHTML = config.steps.map(s => `
-        <div class="legend-row">
-            <div class="legend-color" style="background-color: ${s.color};"></div>
-            <span>${s.label}</span>
-        </div>
-    `).join('');
-    
-    legendEl.style.display = 'block';
-}
-
-    // --- EXISTING CLEANUP LOGIC ---
+    // 1. STOPS ALL TIMERS AND CLEAR PREVIOUS COGS
     if (cogRefreshInterval) {
         clearInterval(cogRefreshInterval);
         cogRefreshInterval = null;
     }
 
+    // Force a complete cleanup of any previous COG source/layer
+    if (map.getLayer('cog-layer-active')) map.removeLayer('cog-layer-active');
+    if (map.getSource('cog-source-active')) map.removeSource('cog-source-active');
+
+    // Also clear generic COG-prefixed layers used by the cleanup loop
     const style = map.getStyle();
     if (style && style.layers) {
         style.layers.forEach(l => {
             if (l.id.startsWith('cog-')) {
                 map.removeLayer(l.id);
-                if (map.getSource(`${l.id}-source`)) {
-                    map.removeSource(`${l.id}-source`);
-                }
+                if (map.getSource(`${l.id}-source`)) map.removeSource(`${l.id}-source`);
             }
         });
     }
 
-    if (map.getLayer('radar')) map.setLayoutProperty('radar', 'visibility', 'none');
+    // 2. UI AND EYEDROPPER MANAGEMENT
+    const thresholdContainer = document.getElementById('thresholdContainer');
+    const filterSlider = document.getElementById('dataFilterSlider');
+    const filterValText = document.getElementById('dataFilterVal');
+    let filterThreshold = filterSlider ? parseFloat(filterSlider.value) : 0;
+    // NEW: Convert inches to mm for the comparison if it's a precip/hail product
+    if (window.activeProductType.match(/rate|qpe|mesh/)) {
+        filterThreshold = filterThreshold * 25.4; 
+    }
 
-    if (folder === 'none') return;
-
-    // --- COG DATA LOADING ---
     if (folder === 'cog') {
-        const loadCOG = async () => {
-            const url = `https://jhwxtools.com/mrms/output/mrms_${layer}_southeast_cog.tif?t=${Date.now()}`;
-            const refreshId = `cog-${Date.now()}`;
-            
+        sampleBtn.style.display = 'flex';
+        thresholdContainer.style.display = 'flex';
+        
+        // Dynamic slider ranges based on data type
+        if (layer.includes('rate') || layer.match(/1h|3h/)) {
+            filterSlider.min = 0; filterSlider.max = 8; filterSlider.step = 0.5;
+        } else if (layer.match(/6h|12h|24h/)) {
+            filterSlider.min = 0; filterSlider.max = 12; filterSlider.step = 1;
+        } else if (layer.includes('mesh')) {
+            filterSlider.min = 0; filterSlider.max = 4; filterSlider.step = 0.25;
+        } else if (layer.includes('reflectivity') || layer.includes('rala')) {
+            filterSlider.min = 0; filterSlider.max = 75; filterSlider.step = 5;
+        }
+        filterSlider.value = 0; 
+        filterValText.innerText = "0";
+    } else {
+        sampleBtn.style.display = 'none';
+        thresholdContainer.style.display = 'none';
+        isSampleMode = false;
+        sampleBtn.style.background = 'transparent';
+    }
+
+    // 3. LEGEND MANAGEMENT (Async Timestamp)
+    const legendEl = document.getElementById('cogLegend');
+    legendEl.style.display = 'none';
+
+    if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
+        const config = COG_CONFIG[layer];
+        const getTimestamp = async (url) => {
             try {
-                const response = await fetch(url);
-                const arrayBuffer = await response.arrayBuffer();
-
-                // 1. Explicitly use the global georaster library to parse
-                // 2. Assign it to window.activeGeoRaster so the Eyedropper can see it
-                window.activeGeoRaster = await window.parseGeoraster(arrayBuffer);
-
-                // 3. Create a local reference so the rest of your loadCOG math doesn't break
-                const georaster = window.activeGeoRaster;           
-                const canvas = document.createElement("canvas");
-                canvas.width = georaster.width;
-                canvas.height = georaster.height;
-                const ctx = canvas.getContext("2d");
-                const image = ctx.createImageData(georaster.width, georaster.height);
-                const values = georaster.values[0];
-
-                let p = 0;
-                for (let y = 0; y < georaster.height; y++) {
-                    for (let x = 0; x < georaster.width; x++) {
-                        const val = values[y][x];
-                        
-                        // FUTURE PROOF: Pick ramp based on layer
-                        let rgba;
-                        if (layer.includes('mesh')) {
-                            rgba = colorRampHail(val);
-                        } else if (layer.match(/6h|12h|24h/)) {
-                            // Use the new extended ramp for multi-hour durations
-                            rgba = colorRampExtendedQPE(val / 25.4); 
-                        } else {
-                            // Keep standard ramp for 1h or others
-                            rgba = colorRamponeHR(val / 25.4);
-                        }
-
-                        if (!rgba) {
-                            image.data[p++] = 0; image.data[p++] = 0; image.data[p++] = 0; image.data[p++] = 0;
-                        } else {
-                            image.data[p++] = rgba[0]; image.data[p++] = rgba[1]; image.data[p++] = rgba[2]; image.data[p++] = rgba[3];
-                        }
-                    }
-                }
-                ctx.putImageData(image, 0, 0);
-
-                // ... rest of your coordinate math and map.addSource logic ...
-                const webMercatorToLngLat = (x, y) => ({
-                    lng: (x / 20037508.34) * 180,
-                    lat: (180 / Math.PI) * (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2)
-                });
-
-                const nw = webMercatorToLngLat(georaster.xmin, georaster.ymax);
-                const ne = webMercatorToLngLat(georaster.xmax, georaster.ymax);
-                const se = webMercatorToLngLat(georaster.xmax, georaster.ymin);
-                const sw = webMercatorToLngLat(georaster.xmin, georaster.ymin);
-
-                map.addSource(`${refreshId}-source`, {
-                    type: "image",
-                    url: canvas.toDataURL(),
-                    coordinates: [[nw.lng, nw.lat], [ne.lng, ne.lat], [se.lng, se.lat], [sw.lng, sw.lat]]
-                });
-
-                map.addLayer({
-                    id: refreshId,
-                    type: "raster",
-                    source: `${refreshId}-source`,
-                    paint: { 'raster-resampling': 'nearest', 'raster-opacity': currentOpacity }
-                }, 'radar');
-
-                map.once('idle', () => {
-                    map.getStyle().layers.forEach(l => {
-                        if (l.id.startsWith('cog-') && l.id !== refreshId) {
-                            map.removeLayer(l.id);
-                            if (map.getSource(`${l.id}-source`)) map.removeSource(`${l.id}-source`);
-                        }
-                    });
-                });
-
-            } catch (err) {
-                console.error("COG Refresh Failed:", err);
-            }
+                const resp = await fetch(`${url}?t=${Date.now()}`);
+                const text = await resp.text();
+                const match = text.split('\n').find(l => l.startsWith(layer));
+                return match ? match.split(',')[1].trim() : null;
+            } catch (e) { return null; }
         };
 
-        await loadCOG();
-        cogRefreshInterval = setInterval(loadCOG, 120000);
+        (async () => {
+            let isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/2min.txt') || 
+                          await getTimestamp('https://jhwxtools.com/mrms/output/hourly.txt');
 
+            if (isoTime) {
+                const dateObj = new Date(isoTime);
+                window.activeLayerTimestamp = ` AS OF ${dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })} ${dateObj.toLocaleDateString([], {month: '2-digit', day: '2-digit', year: '2-digit'})}`;
+            } else { window.activeLayerTimestamp = ""; }
+            document.getElementById('legendTitle').innerText = config.title + window.activeLayerTimestamp;
+        })();
+
+        document.getElementById('legendItems').innerHTML = config.steps.map(s => `
+            <div class="legend-row">
+                <div class="legend-color" style="background-color: ${s.color};"></div>
+                <span>${s.label}</span>
+            </div>`).join('');
+        legendEl.style.display = 'block';
+    }
+
+    // 4. FINAL LAYER EXECUTION
+    if (map.getLayer('radar')) map.setLayoutProperty('radar', 'visibility', 'none');
+    if (folder === 'none') return;
+
+    if (folder === 'cog') {
+        loadCOG(); 
+        cogRefreshInterval = setInterval(loadCOG, 120000);
     } else {
-        // --- STANDARD WMS LOGIC ---
         const source = map.getSource('radar');
-        map.setLayoutProperty('radar', 'visibility', 'visible');
-        map.setPaintProperty('radar', 'raster-opacity', currentOpacity);
-        let url = folder === 'sat' 
-            ? `https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLE=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`
-            : `https://opengeo.ncep.noaa.gov/geoserver/${folder}/${layer}/ows?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`;
-        source.setTiles([url]);
+        if (source) {
+            map.setLayoutProperty('radar', 'visibility', 'visible');
+            map.setPaintProperty('radar', 'raster-opacity', currentOpacity);
+            let url = folder === 'sat' 
+                ? `https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLE=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}`
+                : `https://opengeo.ncep.noaa.gov/geoserver/${folder}/${layer}/ows?service=WMS&version=1.1.1&request=GetMap&layers=${layer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`;
+            source.setTiles([url]);
+        }
     }
 };
 /* =========================================
@@ -3945,6 +4008,10 @@ opSlider.oninput = (e) => {
             map.setPaintProperty(layer.id, 'raster-opacity', val);
         }
     });
+};
+document.getElementById('dataFilterSlider').oninput = (e) => {
+    document.getElementById('dataFilterVal').innerText = e.target.value;
+    loadCOG(); // Re-trigger the processing loop
 };
 </script>
 </body>

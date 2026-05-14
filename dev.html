@@ -79,6 +79,15 @@ body{
     align-items:center;
     flex-wrap:wrap;
 }
+.toolbar-row:first-child {
+    position: relative;
+    z-index: 2;
+}
+
+.toolbar-row.secondary {
+    position: relative;
+    z-index: 1;
+}
 
 /* groups are the key to compact UI */
 .tool-group{
@@ -155,7 +164,17 @@ body{
     color: black;
 }
 
+/* By default, hide the buttons */
+.cone-button, .track-button {
+    display: none;
+}
 
+/* Only show them if a mouse (fine pointer) is detected */
+@media (pointer: fine) {
+    .cone-button, .track-button {
+        display: block; 
+    }
+}
 
 /* radar dropdown styling fix */
 #radarSelector{
@@ -589,8 +608,28 @@ body{
             <div class="tool" id="coneBtn">CONE</div>
             <div class="tool" id="manualBtn">TRACK</div>
         </div>
-<div class="tool-group">
-    <div class="tool" id="drawBtn">DRAW</div>
+    <div class="tool-group" style="position: relative;">
+        <div class="tool" id="drawBtn">DRAW</div>
+        <div id="drawSettingsToggle" title="Draw Settings" style="cursor:pointer; padding: 0 8px; display:flex; align-items:center; color:#a9e7ff; font-size:14px; border-left: 1px solid rgba(255,255,255,0.1);">
+            ⚙️
+        </div>
+        
+        <div id="drawSettingsMenu" style="display:none; position:absolute; top:45px; left:0; background:rgba(15,23,42,0.98); border:2px solid var(--accent); padding:12px; border-radius:12px; z-index:10000; box-shadow:0 8px 25px rgba(0,0,0,0.8); flex-direction:column; gap:10px; min-width:180px;">
+            <div style="font-size:9px; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Line Weight</div>
+            <input type="range" id="drawWeightSlider" min="1" max="25" value="6" style="accent-color:var(--accent); cursor:pointer; width:100%;">
+            <div id="drawWeightVal" style="font-size:11px; color:white; text-align:right;">6px</div>
+            
+            <div style="font-size:9px; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Presets</div>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                <div class="color-swatch" style="background:#ffff00; width:25px; height:25px; border-radius:4px; cursor:pointer; border:1px solid rgba(255,255,255,0.2);" data-color="#ffff00"></div>
+                <div class="color-swatch" style="background:#ff4444; width:25px; height:25px; border-radius:4px; cursor:pointer; border:1px solid rgba(255,255,255,0.2);" data-color="#ff4444"></div>
+                <div class="color-swatch" style="background:#00ff92; width:25px; height:25px; border-radius:4px; cursor:pointer; border:1px solid rgba(255,255,255,0.2);" data-color="#00ff92"></div>
+                <div class="color-swatch" style="background:#ffffff; width:25px; height:25px; border-radius:4px; cursor:pointer; border:1px solid rgba(255,255,255,0.2);" data-color="#ffffff"></div>
+            </div>
+            
+            <div style="font-size:9px; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-top:5px;">Custom Color</div>
+            <input type="color" id="drawColorPicker" value="#ffff00" style="width:100%; height:35px; border:1px solid rgba(255,255,255,0.2); background:none; cursor:pointer; border-radius:6px; padding:2px;">
+        </div>
     <div class="tool" id="spotBtn">SPOT</div>       
     <div class="tool" id="idModeBtn">ID<br>ROADS</div>
     <div class="tool erase-btn" id="eraseBtn">ERASE</div>
@@ -657,6 +696,10 @@ body{
     <option value="cog|24h_qpe">MRMS 24H QPE</option>
     <option value="kmlb|kmlb_bdsa">MLB STA QPE</option>
     <option value="cog|mesh">MRMS Hail Size</option>
+</optgroup>
+                <optgroup label="FLASH/CREST">
+    <option value="cog|flash_soil">Soil Saturation</option>
+    <option value="cog|flash_stream">Unit Streamflow</option>
 
 </optgroup>
                 <optgroup label="Satellite">
@@ -782,6 +825,29 @@ body{
     <button class="tool active" id="confirmExport">EXPORT NOW & COPY</button>
 </div>
 <div id="sampleTooltip" style="position:fixed; pointer-events:none; background:rgba(15, 23, 42, 0.9); color:#00ff92; padding:6px 12px; border-radius:8px; display:none; z-index:10000; font-size:14px; font-weight:900; border:2px solid #00ff92; backdrop-filter:blur(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-family:'Roboto', sans-serif;"></div>
+
+<div id="authModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; font-family:'Roboto',sans-serif;">
+    <div style="background:#1e293b; padding:25px; border-radius:12px; border:1px solid #334155; width:340px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+        <h3 style="color:white; margin-top:0; font-weight:900;">FORECASTER AUTHORIZATION</h3>
+        <p style="color:#94a3b8; font-size:14px; margin-bottom:20px;">
+            A password is required for high-res export. This will persist for the remainder of the browser tab session. 
+            <br>
+            <a href="https://docs.google.com/document/d/1lWcRUdplgO3lBndSz2VivlbfEaI_qu166_iRJg12-oc/preview?tab=t.0" target="_blank" style="color:#38bdf8; text-decoration:none; font-size:12px;">Retrieve it here</a>
+        </p>
+        
+        <input type="password" id="authKeyInput" placeholder="Enter Password..." style="width:100%; padding:12px; margin-bottom:10px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:white; box-sizing:border-box; outline:none;">
+        
+        <div id="authError" style="color:#f87171; font-size:13px; margin-bottom:15px; display:none; font-weight:bold;">
+            Incorrect password. Try again.
+        </div>
+        
+        <div style="display:flex; gap:10px;">
+            <button id="authCancelBtn" style="flex:1; padding:12px; background:#475569; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700;">CANCEL</button>
+            <button id="authSubmitBtn" style="flex:1; padding:12px; background:#0284c7; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:700;">AUTHORIZE</button>
+        </div>
+    </div>
+</div>
+
 <script>
 let coneWidth = 30; // Default width
 let isExportMode = false;
@@ -1013,13 +1079,22 @@ console.log(map.getStyle().layers);
 
     // Click to Query
 map.on('click', 'warnings-shading', (e) => {
+    if (isIdMode || isSampleMode) return;
     if (!e.features || e.features.length === 0) return; // Guard clause
     const feat = e.features[0];
+
+    // If we click the same warning that is already isolated, just exit
+    if (isolatedWarningId === feat.id) {
+        return; 
+    }
+
+    // Otherwise, clear any existing popups before making a new one
+    closeWarningPopup();
 
     const currentZoom = map.getZoom();
 
     // --- UPDATED: SMART AUTO-FIT LOGIC ---
-    if (currentZoom < 10) { // Only auto-zoom if we aren't already zoomed in deep
+    if (currentZoom < 8.5) { // Only auto-zoom if we aren't already zoomed in deep
         // 1. Get the bounding box of the entire polygon
         const bbox = turf.bbox(feat);
         
@@ -1171,7 +1246,7 @@ const popupHtml = `
     
     <div class="popup-handle" style="cursor:move; height:18px; background:${activeColor}; margin:-12px -12px 0 -12px; padding:10px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
         <div class="exit-hint" style="opacity:0; transition: opacity 0.2s; display:flex; gap:10px;">
-             <span onclick="window.copyToClipboard('${smText}')" style="cursor:pointer; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px; font-size:9px; color:${iconColor}; font-weight:900; border:1px solid ${iconColor}44;">COPY SHORT TEXT</span>
+             <span onclick="window.copyToClipboard('${smText}', this)" style="cursor:pointer; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px; font-size:9px; color:${iconColor}; font-weight:900; border:1px solid ${iconColor}44;">COPY SHORT TEXT</span>
         </div>
         <div class="exit-hint" style="opacity:0; transition: opacity 0.2s; font-size: 9px; color: ${iconColor}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; pointer-events: none;">
             Click map to clear
@@ -1212,6 +1287,7 @@ const popupHtml = `
         const popup = new maplibregl.Popup({ 
             closeButton: false, 
             maxWidth: 'none', 
+            closeOnClick: false, // <--- Add this to stop the map from auto-killing it
             className: 'custom-warning-popup',
             // Change anchor to top-left so the box grows DOWN and RIGHT from the point
             anchor: 'top-left', 
@@ -1710,16 +1786,16 @@ map.addLayer({
                 'interpolate',
                 ['linear'],
                 ['get', 'intensity'],
-                0, '#ff4444',   // Red when the storm is "short"
-                70, '#ffa500',  // Orange at mid-range
-                150, '#ffff00'  // Yellow when dragged far
+                0, '#5cb7db',   // Red when the storm is "short"
+                //70, '#005678',  // Orange at mid-range
+                100, '#f0f0f0'  // Yellow when dragged far
             ],
             'fill-opacity': [
                 'interpolate',
                 ['linear'],
                 ['get', 'intensity'],
-                0, 0.8,         // More solid when small
-                150, 0.4        // Very faint when long
+                0, 0.7,         // More solid when small
+                100, 0.5        // Very faint when long
             ]
         }
     });
@@ -1731,13 +1807,13 @@ map.addLayer({
         filter: ['==', '$type', 'Polygon'],
         paint: {
             'line-color': '#ffffff',
-            'line-width': 2,
+            'line-width': 4,
             'line-opacity': [
                 'interpolate',
                 ['linear'],
                 ['get', 'intensity'],
                 0, 0.8,
-                150, 0.5
+                100, 0.6
             ]
         }
     });
@@ -1926,60 +2002,6 @@ map.addLayer({
     }
 });
 
-// --- UNIVERSAL ROAD ID & HOVER LOGIC ---
-
-// Universal helper to find our query layer
-function getRoadLayers() {
-    return map.getStyle().layers
-        .map(l => l.id)
-        .filter(id => id === 'road-shields-hide');
-}
-
-// 1. The Universal Click (Stamp Road Name)
-map.on('click', (e) => {
-    if (!isIdMode) return;
-
-    // Create a 30px search area around the click
-    const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
-
-    const features = map.queryRenderedFeatures(box, {
-        layers: ['road-shields-hide']
-    });
-
-    if (features.length > 0) {
-        // Stop the click from opening warning popups
-        e.originalEvent.stopPropagation();
-        
- // tracker.html around line 999
-const p = features[0].properties;
-let roadName = p._name || p._name_global || p.name || p._ref || p.ref || "Local Road";
-
-        // --- NEW: CLEANUP LOGIC FOR SPECIFIC FL ROADS ---
-        // We use a regex with 'i' (case-insensitive) and handle optional dashes
-        if (/^FL[- ]?5$/i.test(roadName)) {
-            roadName = "US-1";
-        } else if (/^FL[- ]?91$/i.test(roadName)) {
-            roadName = "FL TPKE";
-        } else if (/^FL[- ]?25$/i.test(roadName)) {
-            roadName = "US-27";
-        } else if (/^FL[- ]?9$/i.test(roadName)) {
-            roadName = "I-95";
-        }
-        activeLabels.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
-            properties: { roadName: roadName }
-        });
-
-        map.getSource('persistent-labels').setData({
-            type: 'FeatureCollection',
-            features: activeLabels
-        });
-    } 
-});
-
-
-
 
     // Default: Disable dragPan because starting in Cone Mode
     //map.dragPan.disable();
@@ -2073,6 +2095,11 @@ function setMode(nextMode) {
             canvas.classList.add('cursor-crosshair'); // Change cursor to +
             updateWidthVisibility();
             buttons.cone.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "CONE MODE:<br>CLICK + DRAG TO TRACK";
             break;
@@ -2081,6 +2108,11 @@ function setMode(nextMode) {
             canvas.classList.add('cursor-crosshair'); // Change cursor to +
             updateWidthVisibility();
             buttons.manual.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "LINE TRACK MODE:<br>1. DRAG TO DRAW EDGE<br>2. MOVE TO PROJECT<br>3. CLICK TO LOCK";
             break;
@@ -2088,6 +2120,11 @@ function setMode(nextMode) {
         case 'draw':
             canvas.classList.add('cursor-crosshair'); // Change cursor to +
             buttons.draw.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "DRAW MODE:<br>CLICK + DRAG TO DRAW";
             break;
@@ -2095,6 +2132,11 @@ function setMode(nextMode) {
         case 'spotlight':
             canvas.classList.add('cursor-crosshair');
             buttons.spot.classList.add('active');
+            isIdMode = false;
+            document.getElementById('idModeBtn').style.backgroundColor = "";
+            isSampleMode = false;
+            sampleBtn.style.background = 'transparent';
+            sampleBtn.style.color = '#a9e7ff';
             document.getElementById('help').innerHTML =
                 "SPOTLIGHT MODE:<br>CLICK + DRAG TO HIGHLIGHT AN AREA";
             break;
@@ -2204,27 +2246,84 @@ function getSampleAtLngLat(lng, lat) {
             return Math.round(val) + ' dBZ';
         }
 
+        // 4. SATURATION: %
+        if (type.includes('soil')) {
+            return (val).toFixed(0) + '%';
+        }
+
+        // 4. STREAMFLOW: 
+        if (type.includes('stream')) {
+            return (val * 91.467).toFixed(0) + ' cfs/mi²';
+        }
+
         // Fallback for unknown types
         return (val / 25.4).toFixed(1) + '"'; 
     }
     return null;
 }
 
-// 3. Map Interactions
+
+// --- UNIVERSAL ROAD ID & HOVER LOGIC ---
+
+// Universal helper to find our query layer
+function getRoadLayers() {
+    return map.getStyle().layers
+        .map(l => l.id)
+        .filter(id => id === 'road-shields-hide');
+}
+
+// 1. The Universal Click (Stamp Road Name)
 map.on('click', (e) => {
-    if (!isSampleMode) return;
-    
-    const value = getSampleAtLngLat(e.lngLat.lng, e.lngLat.lat);
-    if (value) {
-        activeSamples.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
-            properties: { value: value }
-        });
-        map.getSource('sample-labels').setData({
-            type: 'FeatureCollection',
-            features: activeSamples
-        });
+    // List of modes that should NOT close the popup
+    const activeTools = ['cone', 'manual', 'draw', 'spotlight'];
+
+    // 1. Handle ROAD ID MODE
+    if (isIdMode) {
+        const box = [[e.point.x - 5, e.point.y - 5], [e.point.x + 5, e.point.y + 5]];
+        const features = map.queryRenderedFeatures(box, { layers: ['road-shields-hide'] });
+        if (features.length > 0) {
+            const p = features[0].properties;
+            let roadName = p._name || p._name_global || p.name || p._ref || p.ref || "Local Road";
+            if (/^FL[- ]?5$/i.test(roadName)) roadName = "US-1";
+            else if (/^FL[- ]?91$/i.test(roadName)) roadName = "FL TPKE";
+            else if (/^FL[- ]?25$/i.test(roadName)) roadName = "US-27";
+            else if (/^FL[- ]?9$/i.test(roadName)) roadName = "I-95";
+
+            activeLabels.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+                properties: { roadName: roadName }
+            });
+            map.getSource('persistent-labels').setData({ type: 'FeatureCollection', features: activeLabels });
+        }
+        return; 
+    }
+
+    // 2. Handle SAMPLE MODE
+    if (isSampleMode) {
+        const value = getSampleAtLngLat(e.lngLat.lng, e.lngLat.lat);
+        if (value) {
+            activeSamples.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+                properties: { value: value }
+            });
+            map.getSource('sample-labels').setData({ type: 'FeatureCollection', features: activeSamples });
+        }
+        return; 
+    }
+
+    // 3. Handle DRAWING/TRACKING MODES
+    // This ensures clicking to set a track or draw doesn't kill the popup
+    if (activeTools.includes(mode)) {
+        return; 
+    }
+
+    // 4. CLEANUP LOGIC
+    // Only runs if we are in 'pan' mode and NOT sampling/ID'ing
+    const warningFeatures = map.queryRenderedFeatures(e.point, { layers: ['warnings-shading'] });
+    if (warningFeatures.length === 0) {
+        closeWarningPopup();
     }
 });
 
@@ -2252,13 +2351,13 @@ function clearStorm() {
 document.getElementById('idModeBtn').onclick = () => {
     isIdMode = !isIdMode;
     const btn = document.getElementById('idModeBtn');
-    
+    setMode('pan');
     if (isIdMode) {
         // NEW: Turn off Eyedropper
         isSampleMode = false;
         sampleBtn.style.background = 'transparent';
         sampleBtn.style.color = '#a9e7ff';
-
+        
         btn.innerHTML = "ID<br>ROADS";
         btn.style.backgroundColor = "#3c7bba";
         map.getCanvas().style.cursor = 'help';
@@ -2285,11 +2384,15 @@ map.on('mousedown', (e) => {
     // Check if we are clicking on a warning
     const features = map.queryRenderedFeatures(e.point, { layers: ['warnings-shading'] });
 
-    // ONLY reset if we clicked empty space. 
-    // If we clicked a warning, DO NOT touch isolatedWarningId here; 
-    // let the 'click' handler below manage the ID swap.
+    // List of modes that are allowed to keep a warning highlighted
+    const persistentModes = ['draw', 'spotlight', 'pan'];
+
     if (features.length === 0) {
-        isolatedWarningId = null;
+        // Reset isolation ONLY if we aren't in ID mode, Sample mode, 
+        // or one of the persistent drawing modes.
+        if (!isIdMode && !isSampleMode && !persistentModes.includes(mode)) {
+            isolatedWarningId = null;
+        }
     }
     
     // Manage drawing/tracking states
@@ -2370,7 +2473,8 @@ if(mode === 'draw' && dragging){
     }
 
     if (mode === 'cone' && dragging) {
-        dragging = false;       
+        dragging = false;    
+        closeWarningPopup();   
         setMode('pan');
     }
 
@@ -2953,33 +3057,62 @@ window.addEventListener('mouseup', () => {
     isDraggingUI = false;
 });
 
-document.getElementById('exportBtn').onclick = async () => {
-    // 1. Check if already authenticated in this session
+const authModal = document.getElementById('authModal');
+const authKeyInput = document.getElementById('authKeyInput');
+const authError = document.getElementById('authError');
+
+// 1. Unified Trigger: Resets and shows the modal
+function handleExportRequest() {
     if (sessionStorage.getItem('exportAuthorized') === 'true') {
-        isSampleMode = false; // Disable eyedropper before export
+        isSampleMode = false;
         return startExportFlow();
     }
+    
+    // UI Reset: Always clear text and errors before showing
+    authKeyInput.value = ""; 
+    authError.style.display = 'none';
+    authModal.style.display = 'flex';
+    
+    // Focus after the event loop clears to keep the input clean
+    setTimeout(() => authKeyInput.focus(), 10);
+}
 
-    const input = prompt("Enter NOAA Authorization Key to Export (Once per session):");
-    if (!input) return;
+// 2. Event Listeners
+document.getElementById('exportBtn').onclick = handleExportRequest;
 
-    // 2. Generate SHA-256 hash
+document.addEventListener('keydown', (e) => {
+    // Avoid triggering if already typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key.toLowerCase() === 'e') {
+        e.preventDefault(); // Prevents 'e' from ever being registered as a character
+        handleExportRequest();
+    }
+});
+
+// 3. Authorization Verification
+document.getElementById('authSubmitBtn').onclick = async () => {
+    const input = authKeyInput.value;
     const msgBuffer = new TextEncoder().encode(input);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // 3. Compare to your master hash
-    const masterHash = "b706305236242b0181d490002cc61629b42111dd9c567e2888183aec242d32bd";
-
-    if (hashHex === masterHash) {
-        sessionStorage.setItem('exportAuthorized', 'true'); // Remember for this session
+    const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Replace with your master hash
+    if (hashHex === "b706305236242b0181d490002cc61629b42111dd9c567e2888183aec242d32bd") {
+        sessionStorage.setItem('exportAuthorized', 'true');
+        authModal.style.display = 'none';
         isSampleMode = false;
         startExportFlow();
     } else {
-        alert("Invalid Authorization Key.");
+        authError.style.display = 'block';
+        authKeyInput.value = ""; // Clear on fail so they can try again immediately
+        authKeyInput.focus();
     }
 };
+
+// Close and Utility
+document.getElementById('authCancelBtn').onclick = () => authModal.style.display = 'none';
+authKeyInput.onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('authSubmitBtn').click(); };
 
 function startExportFlow() {
     const vf = document.getElementById('exportViewfinder');
@@ -3393,6 +3526,8 @@ const loadCOG = async () => {
                 if (window.activeProductType.includes('mesh')) rgba = colorRampHail(val);
                 else if (window.activeProductType.includes('rate')) rgba = colorRampPrecipRate(val);
                 else if (window.activeProductType.includes('rala') || window.activeProductType.includes('reflectivity')) rgba = colorRampReflectivity(val);
+                else if (window.activeProductType.includes('soil')) rgba = colorRampSoilProbability(val);
+                else if (window.activeProductType.includes('stream')) rgba = colorRampStreamflow(val);
                 else if (window.activeProductType.match(/6h|12h|24h/)) rgba = colorRampExtendedQPE(val / 25.4);
                 else rgba = colorRamponeHR(val / 25.4);
 
@@ -3437,6 +3572,37 @@ const loadCOG = async () => {
     }
 };
 
+async function refreshLegendTimestamp() {
+    const layer = window.activeProductType;
+    const parts = document.getElementById('radarSelector').value.split('|');
+    const folder = parts[0];
+
+    if (folder === 'cog' && COG_CONFIG[layer]) {
+        const config = COG_CONFIG[layer];
+        
+        // Helper to fetch the actual text file
+        const getTimestamp = async (url) => {
+            try {
+                const resp = await fetch(`${url}?t=${Date.now()}`);
+                const text = await resp.text();
+                const match = text.split('\n').find(l => l.startsWith(layer));
+                return match ? match.split(',')[1].trim() : null;
+            } catch (e) { return null; }
+        };
+
+        let isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/2min.txt') || 
+                      await getTimestamp('https://jhwxtools.com/mrms/output/hourly.txt');
+
+        if (isoTime) {
+            const dateObj = new Date(isoTime);
+            window.activeLayerTimestamp = ` AS OF ${dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })} ${dateObj.toLocaleDateString([], {month: '2-digit', day: '2-digit', year: '2-digit'})}`;
+        } else { 
+            window.activeLayerTimestamp = ""; 
+        }
+        document.getElementById('legendTitle').innerText = config.title + window.activeLayerTimestamp;
+    }
+}
+
 // Update your existing onchange handler
 document.getElementById('radarSelector').onchange = async (e) => {
     activeSamples = []; // Wipe the data array
@@ -3479,6 +3645,9 @@ document.getElementById('radarSelector').onchange = async (e) => {
     if (window.activeProductType.match(/rate|qpe|mesh/)) {
         filterThreshold = filterThreshold * 25.4; 
     }
+        if (window.activeProductType.match(/stream/)) {
+        filterThreshold = filterThreshold * 91.467; 
+    }
 
     if (folder === 'cog') {
         sampleBtn.style.display = 'flex';
@@ -3493,6 +3662,10 @@ document.getElementById('radarSelector').onchange = async (e) => {
             filterSlider.min = 0; filterSlider.max = 4; filterSlider.step = 0.25;
         } else if (layer.includes('reflectivity') || layer.includes('rala')) {
             filterSlider.min = 0; filterSlider.max = 75; filterSlider.step = 5;
+        } else if (layer.includes('soil')) {
+            filterSlider.min = 40; filterSlider.max = 95; filterSlider.step = 5;
+        } else if (layer.includes('stream')) {
+            filterSlider.min = 0; filterSlider.max = 2000; filterSlider.step = 100;
         }
         filterSlider.value = 0; 
         filterValText.innerText = "0";
@@ -3525,27 +3698,7 @@ document.getElementById('radarSelector').onchange = async (e) => {
     else if (folder === 'cog' && typeof COG_CONFIG !== 'undefined' && COG_CONFIG[layer]) {
         const config = COG_CONFIG[layer];
         
-        const getTimestamp = async (url) => {
-            try {
-                const resp = await fetch(`${url}?t=${Date.now()}`);
-                const text = await resp.text();
-                const match = text.split('\n').find(l => l.startsWith(layer));
-                return match ? match.split(',')[1].trim() : null;
-            } catch (e) { return null; }
-        };
-
-        (async () => {
-            let isoTime = await getTimestamp('https://jhwxtools.com/mrms/output/2min.txt') || 
-                          await getTimestamp('https://jhwxtools.com/mrms/output/hourly.txt');
-
-            if (isoTime) {
-                const dateObj = new Date(isoTime);
-                window.activeLayerTimestamp = ` AS OF ${dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })} ${dateObj.toLocaleDateString([], {month: '2-digit', day: '2-digit', year: '2-digit'})}`;
-            } else { 
-                window.activeLayerTimestamp = ""; 
-            }
-            document.getElementById('legendTitle').innerText = config.title + window.activeLayerTimestamp;
-        })();
+        refreshLegendTimestamp()
 
         document.getElementById('legendItems').innerHTML = config.steps.map(s => `
             <div class="legend-row">
@@ -3561,7 +3714,10 @@ document.getElementById('radarSelector').onchange = async (e) => {
 
     if (folder === 'cog') {
         loadCOG(); 
-        cogRefreshInterval = setInterval(loadCOG, 120000);
+        cogRefreshInterval = setInterval(() => {
+            loadCOG();
+            refreshLegendTimestamp(); // Add this line
+        }, 120000);
     } else {
         const source = map.getSource('radar');
         if (source) {
@@ -3751,7 +3907,9 @@ function resetWarningIsolation() {
 
 function closeWarningPopup() {
     const popups = document.getElementsByClassName('maplibregl-popup');
-    for (let p of popups) p.remove();
+    while (popups[0]) {
+        popups[0].remove();
+    }
     resetWarningIsolation();
 }
 
@@ -3805,7 +3963,7 @@ function makePopupDraggable(id) {
 }
 
 
-setInterval(updateWarnings, 120000);
+setInterval(updateWarnings, 60000);
 
 
 function applyWarningIsolation() {
@@ -4031,6 +4189,10 @@ map.on('mousedown', () => {
     opMenu.style.display = 'none'; 
     opToggle.style.background = 'transparent';
     opToggle.style.color = '#a9e7ff';
+    dsMenu.style.display = 'none'; 
+    dsToggle.style.background = 'transparent';
+    dsToggle.style.color = '#a9e7ff';
+    mainToolbar.style.zIndex = "20";
 });
 
 // Universal Opacity Function
@@ -4053,6 +4215,55 @@ opSlider.oninput = (e) => {
 document.getElementById('dataFilterSlider').oninput = (e) => {
     document.getElementById('dataFilterVal').innerText = e.target.value;
     loadCOG(); // Re-trigger the processing loop
+};
+// --- DRAW SETTINGS LOGIC ---
+const dsToggle = document.getElementById('drawSettingsToggle');
+const dsMenu = document.getElementById('drawSettingsMenu');
+const dwSlider = document.getElementById('drawWeightSlider');
+const dwText = document.getElementById('drawWeightVal');
+const dcPicker = document.getElementById('drawColorPicker');
+const mainToolbar = document.querySelector('.toolbar');
+
+// Toggle Menu Visibility and Z-Index
+dsToggle.onclick = (e) => {
+    e.stopPropagation();
+    if (mode !== 'draw') {
+        setMode('draw');
+    }
+    const isVisible = dsMenu.style.display === 'flex';
+    dsMenu.style.display = isVisible ? 'none' : 'flex';
+    
+    // CHANGE THIS: Target the parent row instead of the whole toolbar
+    const parentRow = dsToggle.closest('.toolbar-row');
+    parentRow.style.zIndex = isVisible ? "2" : "100";
+
+    if (dsMenu.style.display === 'flex') {
+        dsToggle.style.background = 'rgba(56, 189, 248, 0.4)';
+        dsToggle.style.color = '#ffffff';
+    } else {
+        dsToggle.style.background = 'transparent';
+        dsToggle.style.color = '#a9e7ff';
+    }
+};
+
+// Selection Logic: Update any color
+dcPicker.oninput = (e) => {
+    drawColor = e.target.value; // Updates drawing color to any user selection
+};
+
+// Preset Selection Logic
+document.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.onclick = () => {
+        const selected = swatch.getAttribute('data-color');
+        drawColor = selected;
+        dcPicker.value = selected; // Sync the picker with the preset
+    };
+});
+
+// Weight Logic
+dwSlider.oninput = (e) => {
+    drawWidth = parseInt(e.target.value);
+    dwText.innerText = drawWidth + 'px';
 };
 </script>
 </body>
